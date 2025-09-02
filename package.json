@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "AI-powered Business Valuation Platform with comprehensive financial analysis",
   "main": "index.js",
-  "homepage": ".",
+  "homepage": "https://business-valuation-platform-1.vercel.app",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
