@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-// Environment-based API configuration
+// Configure API base URL based on environment
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-vercel-domain.vercel.app/api'  // Update this with your actual Vercel domain
-  : '/api'; // Development proxy
+  ? 'https://business-valuation-platform-1.vercel.app/api'
+  : '/api';
 
 // Create axios instance with configuration
 const api = axios.create({
