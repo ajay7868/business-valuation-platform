@@ -9,7 +9,9 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "build"
+        "distDir": "build",
+        "installCommand": "npm ci",
+        "buildCommand": "npm run build"
       }
     }
   ],
@@ -25,5 +27,10 @@
   ],
   "env": {
     "FLASK_ENV": "production"
+  },
+  "functions": {
+    "app.py": {
+      "runtime": "python3.9"
+    }
   }
 }
