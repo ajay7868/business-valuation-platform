@@ -387,20 +387,18 @@ Asset-Based Valuation:
 • Total Asset Value: ${safe_format_number(valuation_results.get('asset_based', 0)):,.0f}
 
 Income-Based Valuation:
-• DCF Value: ${safe_format_number(valuation_results.get('income_based', {}).get('dcf_value', 0)):,.0f}
-• Capitalization Value: ${safe_format_number(valuation_results.get('income_based', {}).get('capitalization_value', 0)):,.0f}
-• Projected Cash Flows: {', '.join([f'${safe_format_number(flow):,.0f}' for flow in valuation_results.get('income_based', {}).get('projected_flows', [])]) if valuation_results.get('income_based', {}).get('projected_flows') else 'Not available'}
-• Terminal Value: ${safe_format_number(valuation_results.get('income_based', {}).get('terminal_value', 0)):,.0f}
+• EBITDA Multiple Value: ${safe_format_number(valuation_results.get('income_based', 0)):,.0f}
 
 Market-Based Valuation:
-• Revenue Multiple: ${safe_format_number(valuation_results.get('market_based', {}).get('revenue_multiple', 0)):,.0f}
-• EBITDA Multiple: ${safe_format_number(valuation_results.get('market_based', {}).get('ebitda_multiple', 0)):,.0f}
-• SDE Multiple: ${safe_format_number(valuation_results.get('market_based', {}).get('sde_multiple', 0)):,.0f}
+• Revenue Multiple Value: ${safe_format_number(valuation_results.get('market_based', 0)):,.0f}
 
 FINAL VALUATION RANGE:
 • Low Estimate:  ${safe_format_number(valuation_results.get('valuation_range', {}).get('low', 0)):,.0f}
 • Mid Estimate:  ${safe_format_number(valuation_results.get('valuation_range', {}).get('mid', 0)):,.0f}
 • High Estimate: ${safe_format_number(valuation_results.get('valuation_range', {}).get('high', 0)):,.0f}
+
+Methodology: {valuation_results.get('methodology', 'Standard valuation approaches')}
+Key Assumptions: {valuation_results.get('assumptions', 'Industry standard multiples and adjustments')}
 
 {'='*80}
                         SWOT ANALYSIS
@@ -421,21 +419,26 @@ Threats:
 Positioning Guidance:
 {chr(10).join([f'• {guidance}' for guidance in swot_analysis.get('positioning_guidance', ['Not available'])])}
 
+Value Drivers:
+{chr(10).join([f'• {driver}' for driver in swot_analysis.get('value_drivers', ['Not specified'])])}
+
+Risk Mitigation:
+{chr(10).join([f'• {risk}' for risk in swot_analysis.get('risk_mitigation', ['Not specified'])])}
+
 {'='*80}
                         METHODOLOGY & ASSUMPTIONS
 {'='*80}
 
 Valuation Methods Used:
-1. Asset-Based Approach: Book value adjusted for market conditions
-2. Income-Based Approach: Discounted Cash Flow (DCF) with 5-year projections
-3. Market-Based Approach: Industry-specific multiples analysis
+1. Asset-Based Approach: Book value adjusted for market conditions (80% of book value)
+2. Income-Based Approach: EBITDA multiple analysis (6x industry average)
+3. Market-Based Approach: Revenue multiple analysis (1.5x conservative multiple)
 
 Key Assumptions:
-• Growth Rate: 3% annually
-• Discount Rate: 12%
-• Terminal Growth: 3%
-• Equipment Depreciation: 40% of book value
-• Industry Multiples: Based on {company_data.get('industry', 'industry')} standards
+• Asset Discount: 20% of book value for market conditions
+• EBITDA Multiple: 6.0x (industry average)
+• Revenue Multiple: 1.5x (conservative estimate)
+• Industry Standards: Based on {company_data.get('industry', 'general business')} sector
 
 {'='*80}
                         RECOMMENDATIONS
