@@ -1,14 +1,11 @@
 
 import os
 import json
-import pandas as pd
-import pdfplumber
-import openpyxl
-from datetime import datetime
+import datetime
+import re
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-from valuation_engine import BusinessValuationEngine
 
 # Production configuration
 app = Flask(__name__)
@@ -38,7 +35,7 @@ def health_check():
     """Health check endpoint for production monitoring"""
     return jsonify({
         'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
+        'timestamp': datetime.datetime.now().isoformat(),
         'environment': os.environ.get('FLASK_ENV', 'development'),
         'version': '1.0.0'
     })
@@ -87,15 +84,14 @@ def upload_file():
         return jsonify({'error': f'File upload failed: {str(e)}'}), 500
 
 def extract_data_from_file(filepath):
-    """Extract financial data from various file types"""
+    """Extract financial data from various file types - Simplified for Vercel"""
     try:
         file_extension = filepath.rsplit('.', 1)[1].lower()
         
+        # For Vercel deployment, return mock data based on file type
         if file_extension in ['xlsx', 'xls']:
-            # Extract from Excel files
-            df = pd.read_excel(filepath)
             return {
-                'company_name': 'Extracted Company',
+                'company_name': 'Excel Company',
                 'industry': 'Manufacturing',
                 'revenue': 5000000,
                 'ebitda': 800000,
@@ -108,12 +104,6 @@ def extract_data_from_file(filepath):
             }
         
         elif file_extension == 'pdf':
-            # Extract from PDF files
-            with pdfplumber.open(filepath) as pdf:
-                text = ""
-                for page in pdf.pages:
-                    text += page.extract_text() or ""
-            
             return {
                 'company_name': 'PDF Company',
                 'industry': 'Services',
@@ -128,8 +118,6 @@ def extract_data_from_file(filepath):
             }
         
         elif file_extension == 'csv':
-            # Extract from CSV files
-            df = pd.read_csv(filepath)
             return {
                 'company_name': 'CSV Company',
                 'industry': 'Technology',
@@ -144,7 +132,6 @@ def extract_data_from_file(filepath):
             }
         
         else:
-            # Default data for other file types
             return {
                 'company_name': 'Uploaded Company',
                 'industry': 'General',
@@ -334,8 +321,8 @@ def generate_report():
 
 Company: {company_data.get('company_name', 'Unknown Company')}
 Industry: {company_data.get('industry', 'Not Specified')}
-Report Date: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
-Valuation Date: {datetime.now().strftime('%B %d, %Y')}
+Report Date: {datetime.datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+Valuation Date: {datetime.datetime.now().strftime('%B %d, %Y')}
 
 {'='*80}
                            EXECUTIVE SUMMARY
@@ -434,13 +421,13 @@ considered as investment advice. The analysis is based on the information provid
 and current market conditions. Professional consultation is recommended before 
 making any investment decisions.
 
-Report Generated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+Report Generated: {datetime.datetime.now().strftime('%B %d, %Y at %I:%M %p')}
 Valuation Platform: Business Valuation Platform v1.0
 {'='*80}
         """
         
         # Save report to file
-        report_filename = f"valuation_report_{company_data.get('company_name', 'company').replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        report_filename = f"valuation_report_{company_data.get('company_name', 'company').replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
         
         with open(report_path, 'w') as f:
