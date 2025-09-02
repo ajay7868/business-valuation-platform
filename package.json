@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "AI-powered Business Valuation Platform with comprehensive financial analysis",
   "main": "index.js",
+  "homepage": ".",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
