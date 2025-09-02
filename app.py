@@ -84,81 +84,715 @@ def upload_file():
         return jsonify({'error': f'File upload failed: {str(e)}'}), 500
 
 def extract_data_from_file(filepath):
-    """Extract financial data from various file types - Simplified for Vercel"""
+    """Extract real financial data from various file types"""
     try:
         file_extension = filepath.rsplit('.', 1)[1].lower()
         
-        # For Vercel deployment, return mock data based on file type
         if file_extension in ['xlsx', 'xls']:
-            return {
-                'company_name': 'Excel Company',
-                'industry': 'Manufacturing',
-                'revenue': 5000000,
-                'ebitda': 800000,
-                'total_assets': 3000000,
-                'inventory': 800000,
-                'accounts_receivable': 600000,
-                'cash': 200000,
-                'total_liabilities': 1200000,
-                'employees': 45
-            }
-        
+            return extract_from_excel(filepath)
         elif file_extension == 'pdf':
-            return {
-                'company_name': 'PDF Company',
-                'industry': 'Services',
-                'revenue': 2000000,
-                'ebitda': 400000,
-                'total_assets': 1500000,
-                'inventory': 200000,
-                'accounts_receivable': 300000,
-                'cash': 100000,
-                'total_liabilities': 600000,
-                'employees': 25
-            }
-        
+            return extract_from_pdf(filepath)
         elif file_extension == 'csv':
-            return {
-                'company_name': 'CSV Company',
-                'industry': 'Technology',
-                'revenue': 3000000,
-                'ebitda': 600000,
-                'total_assets': 2000000,
-                'inventory': 300000,
-                'accounts_receivable': 400000,
-                'cash': 150000,
-                'total_liabilities': 800000,
-                'employees': 35
-            }
-        
+            return extract_from_csv(filepath)
         else:
-            return {
-                'company_name': 'Uploaded Company',
-                'industry': 'General',
-                'revenue': 1000000,
-                'ebitda': 200000,
-                'total_assets': 1000000,
-                'inventory': 100000,
-                'accounts_receivable': 150000,
-                'cash': 50000,
-                'total_liabilities': 400000,
-                'employees': 20
-            }
+            return extract_from_image(filepath)
             
     except Exception as e:
         print(f"Data extraction error: {str(e)}")
-        return {
-            'company_name': 'Error Company',
-            'industry': 'Unknown',
-            'revenue': 0,
-            'ebitda': 0,
-            'total_assets': 0,
-            'inventory': 0,
-            'accounts_receivable': 0,
-            'cash': 0,
-            'total_liabilities': 0,
-            'employees': 0
+        return get_empty_data()
+
+def extract_from_excel(filepath):
+    """Extract data from Excel files"""
+    try:
+        import pandas as pd
+        import openpyxl
+        
+        # Read Excel file
+        df = pd.read_excel(filepath, sheet_name=None)
+        
+        # Try to find the most relevant sheet
+        target_sheet = None
+        for sheet_name, sheet_df in df.items():
+            if any(keyword in sheet_name.lower() for keyword in ['financial', 'income', 'balance', 'data', 'summary']):
+                target_sheet = sheet_df
+                break
+        
+        if target_sheet is None:
+            # Use first sheet if no financial sheet found
+            target_sheet = list(df.values())[0]
+        
+        # Convert to string for easier searching
+        target_sheet_str = target_sheet.astype(str)
+        
+        # Extract company information
+        company_data = extract_company_info_from_dataframe(target_sheet, target_sheet_str)
+        
+        # Validate and clean the extracted data
+        company_data = validate_and_clean_data(company_data)
+        
+        print(f"DEBUG: Extracted Excel data: {company_data}")
+        return company_data
+        
+    except Exception as e:
+        print(f"Excel extraction error: {str(e)}")
+        return get_empty_data()
+
+def extract_from_pdf(filepath):
+    """Extract data from PDF files"""
+    try:
+        import pdfplumber
+        
+        extracted_text = ""
+        with pdfplumber.open(filepath) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    extracted_text += text + "\n"
+        
+        # Extract company information from text
+        company_data = extract_company_info_from_text(extracted_text)
+        
+        # Validate and clean the extracted data
+        company_data = validate_and_clean_data(company_data)
+        
+        print(f"DEBUG: Extracted PDF data: {company_data}")
+        return company_data
+        
+    except Exception as e:
+        print(f"PDF extraction error: {str(e)}")
+        return get_empty_data()
+
+def extract_from_csv(filepath):
+    """Extract data from CSV files"""
+    try:
+        import pandas as pd
+        
+        # Read CSV file
+        df = pd.read_csv(filepath)
+        
+        # Check if CSV has a key-value structure (like our test file)
+        if len(df.columns) == 2 and 'Metric' in df.columns and 'Value' in df.columns:
+            # Handle key-value structure
+            company_data = get_empty_data()
+            
+            # Extract company name
+            company_row = df[df['Metric'] == 'Company Name']
+            if not company_row.empty:
+                company_data['company_name'] = company_row['Value'].iloc[0]
+            
+            # Extract industry
+            industry_row = df[df['Metric'] == 'Industry']
+            if not industry_row.empty:
+                company_data['industry'] = industry_row['Value'].iloc[0]
+            
+            # Extract financial metrics
+            for metric in ['Revenue', 'EBITDA', 'Total Assets', 'Inventory', 'Accounts Receivable', 'Cash', 'Total Liabilities', 'Employees']:
+                row = df[df['Metric'] == metric]
+                if not row.empty:
+                    value_str = str(row['Value'].iloc[0])
+                    try:
+                        # Clean the value (remove $ and commas)
+                        clean_value = float(value_str.replace('$', '').replace(',', ''))
+                        if metric == 'Revenue':
+                            company_data['revenue'] = clean_value
+                        elif metric == 'EBITDA':
+                            company_data['ebitda'] = clean_value
+                        elif metric == 'Total Assets':
+                            company_data['total_assets'] = clean_value
+                        elif metric == 'Inventory':
+                            company_data['inventory'] = clean_value
+                        elif metric == 'Accounts Receivable':
+                            company_data['accounts_receivable'] = clean_value
+                        elif metric == 'Cash':
+                            company_data['cash'] = clean_value
+                        elif metric == 'Total Liabilities':
+                            company_data['total_liabilities'] = clean_value
+                        elif metric == 'Employees':
+                            company_data['employees'] = int(clean_value)
+                    except ValueError:
+                        continue
+            
+            print(f"DEBUG: Extracted CSV data (key-value): {company_data}")
+            
+            # Validate and clean the extracted data
+            company_data = validate_and_clean_data(company_data)
+            return company_data
+        else:
+            # Handle regular CSV structure
+            df_str = df.astype(str)
+            company_data = extract_company_info_from_dataframe(df, df_str)
+            
+            print(f"DEBUG: Extracted CSV data (regular): {company_data}")
+            
+            # Validate and clean the extracted data
+            company_data = validate_and_clean_data(company_data)
+            return company_data
+        
+    except Exception as e:
+        print(f"CSV extraction error: {str(e)}")
+        return get_empty_data()
+
+def extract_from_image(filepath):
+    """Extract data from image files (OCR would be needed for production)"""
+    try:
+        # For now, return empty data for images
+        # In production, you could integrate OCR services like Tesseract or cloud OCR
+        return get_empty_data()
+    except Exception as e:
+        print(f"Image extraction error: {str(e)}")
+        return get_empty_data()
+
+def extract_company_info_from_dataframe(df, df_str):
+    """Extract company information from pandas DataFrame"""
+    company_data = get_empty_data()
+    
+    try:
+        # Look for company name in column headers or first few rows
+        company_name = find_company_name(df, df_str)
+        if company_name:
+            company_data['company_name'] = company_name
+        
+        # Look for industry information
+        industry = find_industry(df, df_str)
+        if industry:
+            company_data['industry'] = industry
+        
+        # Extract financial metrics
+        financial_metrics = extract_financial_metrics(df, df_str)
+        company_data.update(financial_metrics)
+        
+        # Extract employee count
+        employees = find_employee_count(df, df_str)
+        if employees:
+            company_data['employees'] = employees
+            
+    except Exception as e:
+        print(f"DataFrame extraction error: {str(e)}")
+    
+    return company_data
+
+def extract_company_info_from_text(text):
+    """Extract company information from text content"""
+    company_data = get_empty_data()
+    
+    try:
+        # Look for company name patterns
+        company_name = find_company_name_in_text(text)
+        if company_name:
+            company_data['company_name'] = company_name
+        
+        # Look for industry information
+        industry = find_industry_in_text(text)
+        if industry:
+            company_data['industry'] = industry
+        
+        # Extract financial metrics from text
+        financial_metrics = extract_financial_metrics_from_text(text)
+        company_data.update(financial_metrics)
+        
+        # Extract employee count from text
+        employees = find_employee_count_in_text(text)
+        if employees:
+            company_data['employees'] = employees
+            
+    except Exception as e:
+        print(f"Text extraction error: {str(e)}")
+    
+    return company_data
+
+def find_company_name(df, df_str):
+    """Find company name in DataFrame"""
+    try:
+        # Look for common company name patterns
+        company_patterns = [
+            'company', 'corp', 'inc', 'llc', 'ltd', 'enterprises', 'group', 'holdings'
+        ]
+        
+        # Check column headers
+        for col in df.columns:
+            if any(pattern in str(col).lower() for pattern in company_patterns):
+                # Look for non-null values in this column
+                values = df[col].dropna()
+                if not values.empty:
+                    value = str(values.iloc[0])
+                    if value and value != 'nan' and len(value.strip()) > 3:
+                        return value.strip()
+        
+        # Check first few rows for company names
+        for idx in range(min(3, len(df))):
+            for col in df.columns:
+                value = str(df.iloc[idx][col])
+                if any(pattern in value.lower() for pattern in company_patterns):
+                    if value and value != 'nan' and len(value.strip()) > 3:
+                        return value.strip()
+        
+        # Look for any capitalized company-like names in the first few rows
+        for idx in range(min(3, len(df))):
+            for col in df.columns:
+                value = str(df.iloc[idx][col])
+                if (value and value != 'nan' and 
+                    value[0].isupper() and 
+                    len(value.strip()) > 5 and
+                    any(word in value.lower() for word in ['company', 'corp', 'inc', 'llc', 'ltd'])):
+                    return value.strip()
+        
+        return None
+    except Exception as e:
+        print(f"Company name extraction error: {str(e)}")
+        return None
+
+def find_company_name_in_text(text):
+    """Find company name in text content"""
+    try:
+        # Look for common company name patterns
+        import re
+        
+        # Common company suffixes
+        company_suffixes = r'\b(?:Company|Corp|Inc|LLC|Ltd|Enterprises|Group|Holdings|Industries|Solutions|Technologies|Services)\b'
+        
+        # Look for patterns like "Company Name Inc" or "Company Name LLC"
+        patterns = [
+            r'\b([A-Z][a-zA-Z\s&]+)\s+(?:' + company_suffixes + r')\b',
+            r'\b([A-Z][a-zA-Z\s&]+)\s+(?:Corporation|Limited|Company)\b',
+            r'\b([A-Z][a-zA-Z\s&]{3,})\b'  # General capitalized names
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                # Return the first meaningful match
+                for match in matches:
+                    if len(match.strip()) > 3 and not match.strip().isdigit():
+                        return match.strip()
+        
+        return None
+    except Exception as e:
+        print(f"Company name text extraction error: {str(e)}")
+        return None
+
+def find_industry(df, df_str):
+    """Find industry information in DataFrame"""
+    try:
+        # Look for industry-related columns
+        industry_keywords = ['industry', 'sector', 'business', 'type', 'category']
+        
+        for col in df.columns:
+            if any(keyword in str(col).lower() for keyword in industry_keywords):
+                values = df[col].dropna()
+                if not values.empty:
+                    return str(values.iloc[0])
+        
+        return None
+    except Exception as e:
+        print(f"Industry extraction error: {str(e)}")
+        return None
+
+def find_industry_in_text(text):
+    """Find industry information in text content"""
+    try:
+        # Common industry keywords
+        industries = [
+            'manufacturing', 'technology', 'healthcare', 'finance', 'retail', 'services',
+            'construction', 'transportation', 'energy', 'telecommunications', 'education',
+            'real estate', 'agriculture', 'mining', 'utilities', 'media', 'entertainment'
+        ]
+        
+        text_lower = text.lower()
+        for industry in industries:
+            if industry in text_lower:
+                return industry.title()
+        
+        return None
+    except Exception as e:
+        print(f"Industry text extraction error: {str(e)}")
+        return None
+
+def extract_financial_metrics(df, df_str):
+    """Extract financial metrics from DataFrame"""
+    metrics = {}
+    
+    try:
+        # Define financial metric patterns and their variations
+        metric_patterns = {
+            'revenue': ['revenue', 'sales', 'income', 'turnover', 'gross revenue'],
+            'ebitda': ['ebitda', 'operating income', 'operating profit', 'operating earnings'],
+            'total_assets': ['total assets', 'assets', 'total asset', 'asset base'],
+            'inventory': ['inventory', 'stock', 'goods', 'merchandise'],
+            'accounts_receivable': ['accounts receivable', 'receivables', 'ar', 'debtors'],
+            'cash': ['cash', 'cash and cash equivalents', 'cash balance', 'bank balance'],
+            'total_liabilities': ['total liabilities', 'liabilities', 'debt', 'total debt'],
+            'net_income': ['net income', 'net profit', 'profit', 'earnings', 'net earnings']
         }
+        
+        for metric, patterns in metric_patterns.items():
+            value = find_metric_value(df, df_str, patterns)
+            if value is not None:
+                metrics[metric] = value
+        
+        # If no metrics found, try to extract from the data structure
+        if not metrics:
+            metrics = extract_metrics_from_data_structure(df)
+        
+        # If still no metrics, try to find any numeric data in the DataFrame
+        if not metrics:
+            metrics = find_any_numeric_data(df)
+        
+    except Exception as e:
+        print(f"Financial metrics extraction error: {str(e)}")
+    
+    return metrics
+
+def extract_metrics_from_data_structure(df):
+    """Extract metrics from the data structure when patterns don't match"""
+    metrics = {}
+    
+    try:
+        import pandas as pd
+        
+        # Look for columns that might contain financial data
+        for col in df.columns:
+            col_lower = str(col).lower()
+            
+            # Check if this column contains financial data
+            if any(keyword in col_lower for keyword in ['revenue', 'sales', 'income']):
+                # Look for numeric values in this column
+                for value in df[col]:
+                    if pd.notna(value) and str(value).replace('$', '').replace(',', '').replace('.', '').isdigit():
+                        try:
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                metrics['revenue'] = clean_value
+                                break
+                        except ValueError:
+                            continue
+            
+            elif any(keyword in col_lower for keyword in ['ebitda', 'operating']):
+                for value in df[col]:
+                    if pd.notna(value) and str(value).replace('$', '').replace(',', '').replace('.', '').isdigit():
+                        try:
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                metrics['ebitda'] = clean_value
+                                break
+                        except ValueError:
+                            continue
+            
+            elif any(keyword in col_lower for keyword in ['assets', 'asset']):
+                for value in df[col]:
+                    if pd.notna(value) and str(value).replace('$', '').replace(',', '').replace('.', '').isdigit():
+                        try:
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                metrics['total_assets'] = clean_value
+                                break
+                        except ValueError:
+                            continue
+            
+            elif any(keyword in col_lower for keyword in ['inventory', 'stock']):
+                for value in df[col]:
+                    if pd.notna(value) and pd.notna(value) and str(value).replace('$', '').replace(',', '').replace('.', '').isdigit():
+                        try:
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                metrics['inventory'] = clean_value
+                                break
+                        except ValueError:
+                            continue
+            
+            elif any(keyword in col_lower for keyword in ['receivable', 'ar']):
+                for value in df[col]:
+                    if pd.notna(value) and str(value).replace('$', '').replace(',', '').replace('.', '').isdigit():
+                        try:
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                metrics['accounts_receivable'] = clean_value
+                                break
+                        except ValueError:
+                            continue
+            
+            elif any(keyword in col_lower for keyword in ['cash', 'bank']):
+                for value in df[col]:
+                    if pd.notna(value) and str(value).replace('$', '').replace(',', '').replace('.', '').isdigit():
+                        try:
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                metrics['cash'] = clean_value
+                                break
+                        except ValueError:
+                            continue
+            
+            elif any(keyword in col_lower for keyword in ['liabilities', 'debt']):
+                for value in df[col]:
+                    if pd.notna(value) and str(value).replace('$', '').replace(',', '').replace('.', '').isdigit():
+                        try:
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                metrics['total_liabilities'] = clean_value
+                                break
+                        except ValueError:
+                            continue
+        
+    except Exception as e:
+        print(f"Data structure extraction error: {str(e)}")
+    
+    return metrics
+
+def validate_and_clean_data(company_data):
+    """Validate and clean extracted company data"""
+    try:
+        # Remove None values and replace with appropriate defaults
+        cleaned_data = {}
+        
+        for key, value in company_data.items():
+            if value is not None:
+                cleaned_data[key] = value
+            else:
+                # Set reasonable defaults for missing data
+                if key in ['revenue', 'ebitda', 'total_assets', 'inventory', 'accounts_receivable', 'cash', 'total_liabilities', 'net_income']:
+                    cleaned_data[key] = 0
+                elif key == 'employees':
+                    cleaned_data[key] = 0
+                elif key == 'company_name':
+                    cleaned_data[key] = 'Extracted Company'
+                elif key == 'industry':
+                    cleaned_data[key] = 'General Business'
+        
+        # Ensure we have at least some basic data
+        if not cleaned_data.get('company_name'):
+            cleaned_data['company_name'] = 'Extracted Company'
+        
+        if not cleaned_data.get('industry'):
+            cleaned_data['industry'] = 'General Business'
+        
+        print(f"DEBUG: Cleaned data: {cleaned_data}")
+        return cleaned_data
+        
+    except Exception as e:
+        print(f"Data validation error: {str(e)}")
+        return company_data
+
+def find_any_numeric_data(df):
+    """Find any numeric data in the DataFrame that could be financial metrics"""
+    metrics = {}
+    
+    try:
+        import pandas as pd
+        
+        # Look through all numeric columns
+        for col in df.columns:
+            if df[col].dtype in ['int64', 'float64'] or df[col].dtype == 'object':
+                # Check if column contains numeric data
+                numeric_values = []
+                for value in df[col]:
+                    if pd.notna(value):
+                        try:
+                            # Try to convert to float
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                numeric_values.append(clean_value)
+                        except ValueError:
+                            continue
+                
+                if numeric_values:
+                    # Use the largest value as it's likely the most significant
+                    max_value = max(numeric_values)
+                    
+                    # Try to guess what this metric represents based on column name
+                    col_lower = str(col).lower()
+                    
+                    if any(keyword in col_lower for keyword in ['revenue', 'sales', 'income', 'turnover']):
+                        metrics['revenue'] = max_value
+                    elif any(keyword in col_lower for keyword in ['ebitda', 'operating', 'profit']):
+                        metrics['ebitda'] = max_value
+                    elif any(keyword in col_lower for keyword in ['assets', 'asset']):
+                        metrics['total_assets'] = max_value
+                    elif any(keyword in col_lower for keyword in ['inventory', 'stock']):
+                        metrics['inventory'] = max_value
+                    elif any(keyword in col_lower for keyword in ['receivable', 'ar']):
+                        metrics['accounts_receivable'] = max_value
+                    elif any(keyword in col_lower for keyword in ['cash', 'bank']):
+                        metrics['cash'] = max_value
+                    elif any(keyword in col_lower for keyword in ['liability', 'debt']):
+                        metrics['total_liabilities'] = max_value
+                    elif any(keyword in col_lower for keyword in ['employee', 'staff', 'fte']):
+                        metrics['employees'] = int(max_value)
+                    else:
+                        # If we can't identify the metric, store it with a generic name
+                        if 'revenue' not in metrics:
+                            metrics['revenue'] = max_value
+                        elif 'total_assets' not in metrics:
+                            metrics['total_assets'] = max_value
+        
+        return metrics
+        
+    except Exception as e:
+        print(f"Find any numeric data error: {str(e)}")
+        return {}
+
+def extract_financial_metrics_from_text(text):
+    """Extract financial metrics from text content"""
+    metrics = {}
+    
+    try:
+        import re
+        
+        # Define financial metric patterns
+        metric_patterns = {
+            'revenue': [
+                r'revenue[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'sales[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'income[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)'
+            ],
+            'ebitda': [
+                r'ebitda[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'operating income[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'operating profit[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)'
+            ],
+            'total_assets': [
+                r'total assets[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'assets[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)'
+            ],
+            'inventory': [
+                r'inventory[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'stock[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)'
+            ],
+            'accounts_receivable': [
+                r'accounts receivable[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'receivables[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)'
+            ],
+            'cash': [
+                r'cash[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'bank balance[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)'
+            ],
+            'total_liabilities': [
+                r'total liabilities[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'liabilities[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'debt[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)'
+            ],
+            'net_income': [
+                r'net income[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'net profit[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)',
+                r'profit[:\s]*\$?([0-9,]+(?:\.[0-9]{2})?)'
+            ]
+        }
+        
+        for metric, patterns in metric_patterns.items():
+            value = find_metric_value_in_text(text, patterns)
+            if value is not None:
+                metrics[metric] = value
+        
+    except Exception as e:
+        print(f"Financial metrics text extraction error: {str(e)}")
+    
+    return metrics
+
+def find_metric_value(df, df_str, patterns):
+    """Find metric value in DataFrame"""
+    try:
+        import pandas as pd
+        
+        # Look for columns that match the patterns
+        for pattern in patterns:
+            for col in df.columns:
+                if pattern in str(col).lower():
+                    # Look for numeric values in this column
+                    numeric_values = pd.to_numeric(df[col], errors='coerce').dropna()
+                    if not numeric_values.empty:
+                        return float(numeric_values.iloc[0])
+        
+        # Look for values in rows that contain the patterns
+        for pattern in patterns:
+            for idx in range(len(df)):
+                for col in df.columns:
+                    cell_value = str(df.iloc[idx][col])
+                    if pattern in cell_value.lower():
+                        # Look for numeric values in nearby cells
+                        for nearby_col in df.columns:
+                            nearby_value = pd.to_numeric(df.iloc[idx][nearby_col], errors='coerce')
+                            if not pd.isna(nearby_value):
+                                return float(nearby_value)
+        
+        return None
+    except Exception as e:
+        print(f"Metric value extraction error: {str(e)}")
+        return None
+
+def find_metric_value_in_text(text, patterns):
+    """Find metric value in text content"""
+    try:
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                # Convert to float, removing commas
+                value_str = matches[0].replace(',', '')
+                try:
+                    return float(value_str)
+                except ValueError:
+                    continue
+        
+        return None
+    except Exception as e:
+        print(f"Metric value text extraction error: {str(e)}")
+        return None
+
+def find_employee_count(df, df_str):
+    """Find employee count in DataFrame"""
+    try:
+        import pandas as pd
+        
+        # Look for employee-related columns
+        employee_keywords = ['employees', 'staff', 'headcount', 'fte', 'full time equivalent']
+        
+        for col in df.columns:
+            if any(keyword in str(col).lower() for keyword in employee_keywords):
+                values = pd.to_numeric(df[col], errors='coerce').dropna()
+                if not values.empty:
+                    return int(values.iloc[0])
+        
+        return None
+    except Exception as e:
+        print(f"Employee count extraction error: {str(e)}")
+        return None
+
+def find_employee_count_in_text(text):
+    """Find employee count in text content"""
+    try:
+        import re
+        
+        # Look for employee count patterns
+        patterns = [
+            r'(\d+)\s+employees?',
+            r'(\d+)\s+staff',
+            r'(\d+)\s+fte',
+            r'headcount[:\s]*(\d+)',
+            r'workforce[:\s]*(\d+)'
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                return int(matches[0])
+        
+        return None
+    except Exception as e:
+        print(f"Employee count text extraction error: {str(e)}")
+        return None
+
+def get_empty_data():
+    """Return empty company data structure for real extraction"""
+    return {
+        'company_name': None,
+        'industry': None,
+        'revenue': None,
+        'ebitda': None,
+        'total_assets': None,
+        'inventory': None,
+        'accounts_receivable': None,
+        'cash': None,
+        'total_liabilities': None,
+        'net_income': None,
+        'employees': None
+    }
 
 @app.route('/api/valuation', methods=['POST'])
 def calculate_valuation():
@@ -322,9 +956,18 @@ def generate_swot():
     except Exception as e:
         return jsonify({'error': f'SWOT generation failed: {str(e)}'}), 500
 
+# Helper function to safely format numbers
+def safe_format_number(value, default=0):
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
 @app.route('/api/report/generate', methods=['POST'])
 def generate_report():
-    """Generate comprehensive valuation report"""
+    """Generate comprehensive valuation report in multiple formats"""
     try:
         data = request.json
         report_type = data.get('format', 'pdf').lower()
@@ -334,20 +977,484 @@ def generate_report():
         print(f"DEBUG: Company data keys: {list(data.get('company_data', {}).keys())}")
         print(f"DEBUG: Valuation results keys: {list(data.get('valuation_results', {}).keys())}")
         print(f"DEBUG: SWOT analysis keys: {list(data.get('swot_analysis', {}).keys())}")
+        print(f"DEBUG: Requested format: {report_type}")
         
         # Get company data
         company_data = data.get('company_data', {})
         valuation_results = data.get('valuation_results', {})
         swot_analysis = data.get('swot_analysis', {})
         
-        # Helper function to safely format numbers
-        def safe_format_number(value, default=0):
-            try:
-                if value is None:
-                    return default
-                return float(value)
-            except (ValueError, TypeError):
-                return default
+        # Generate report based on requested format
+        try:
+            if report_type == 'pdf':
+                report_filename, report_path = generate_pdf_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
+            elif report_type == 'excel':
+                report_filename, report_path = generate_excel_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
+            elif report_type == 'word':
+                report_filename, report_path = generate_word_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
+            else:
+                # Default to PDF if format not supported
+                report_filename, report_path = generate_pdf_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
+        except Exception as format_error:
+            print(f"Format-specific generation failed: {str(format_error)}")
+            print("Falling back to text format...")
+            report_filename, report_path = generate_text_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
+        
+        return jsonify({
+            'status': 'success',
+            'report_filename': report_filename,
+            'report_path': report_path,
+            'download_url': f'/api/report/download/{report_filename}',
+            'message': f'Comprehensive valuation report generated successfully in {report_type.upper()} format'
+        })
+        
+    except Exception as e:
+        print(f"Report generation error: {str(e)}")
+        return jsonify({'error': f'Report generation failed: {str(e)}'}), 500
+
+def generate_pdf_report(company_data, valuation_results, swot_analysis, data, safe_format_number):
+    """Generate PDF report using ReportLab"""
+    try:
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        
+        # Create filename
+        report_filename = f"valuation_report_{company_data.get('company_name', 'company').replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
+        
+        # Create PDF document
+        doc = SimpleDocTemplate(report_path, pagesize=A4)
+        story = []
+        
+        # Get styles
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            spaceAfter=30,
+            alignment=TA_CENTER,
+            textColor=colors.darkblue
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            spaceAfter=12,
+            spaceBefore=20,
+            textColor=colors.darkblue
+        )
+        
+        # Title
+        story.append(Paragraph("BUSINESS VALUATION REPORT", title_style))
+        story.append(Spacer(1, 20))
+        
+        # Company Information
+        story.append(Paragraph(f"Company: {company_data.get('company_name', 'Unknown Company')}", styles['Normal']))
+        story.append(Paragraph(f"Industry: {company_data.get('industry', 'Not Specified')}", styles['Normal']))
+        story.append(Paragraph(f"Report Date: {datetime.datetime.now().strftime('%B %d, %Y at %I:%M %p')}", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Executive Summary
+        story.append(Paragraph("EXECUTIVE SUMMARY", heading_style))
+        story.append(Paragraph(data.get('executive_summary', 'Executive summary not available'), styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Company Overview
+        story.append(Paragraph("COMPANY OVERVIEW", heading_style))
+        
+        # Financial metrics table
+        financial_data = [
+            ['Metric', 'Value'],
+            ['Annual Revenue', f"${safe_format_number(company_data.get('revenue', 0)):,.0f}"],
+            ['EBITDA', f"${safe_format_number(company_data.get('ebitda', 0)):,.0f}"],
+            ['Net Income', f"${safe_format_number(company_data.get('net_income', 0)):,.0f}"],
+            ['Total Assets', f"${safe_format_number(company_data.get('total_assets', 0)):,.0f}"],
+            ['Inventory', f"${safe_format_number(company_data.get('inventory', 0)):,.0f}"],
+            ['Accounts Receivable', f"${safe_format_number(company_data.get('accounts_receivable', 0)):,.0f}"],
+            ['Cash', f"${safe_format_number(company_data.get('cash', 0)):,.0f}"]
+        ]
+        
+        financial_table = Table(financial_data, colWidths=[2*inch, 2*inch])
+        financial_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(financial_table)
+        story.append(Spacer(1, 20))
+        
+        # Valuation Results
+        story.append(Paragraph("VALUATION RESULTS", heading_style))
+        
+        valuation_data = [
+            ['Method', 'Value'],
+            ['Asset-Based', f"${safe_format_number(valuation_results.get('asset_based', 0)):,.0f}"],
+            ['Income-Based', f"${safe_format_number(valuation_results.get('income_based', 0)):,.0f}"],
+            ['Market-Based', f"${safe_format_number(valuation_results.get('market_based', 0)):,.0f}"],
+            ['Low Estimate', f"${safe_format_number(valuation_results.get('valuation_range', {}).get('low', 0)):,.0f}"],
+            ['Mid Estimate', f"${safe_format_number(valuation_results.get('valuation_range', {}).get('mid', 0)):,.0f}"],
+            ['High Estimate', f"${safe_format_number(valuation_results.get('valuation_range', {}).get('high', 0)):,.0f}"]
+        ]
+        
+        valuation_table = Table(valuation_data, colWidths=[2*inch, 2*inch])
+        valuation_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(valuation_table)
+        story.append(Spacer(1, 20))
+        
+        # SWOT Analysis
+        story.append(Paragraph("SWOT ANALYSIS", heading_style))
+        
+        # Strengths
+        story.append(Paragraph("Strengths:", styles['Heading3']))
+        for strength in swot_analysis.get('strengths', ['Not available']):
+            story.append(Paragraph(f"• {strength}", styles['Normal']))
+        story.append(Spacer(1, 10))
+        
+        # Weaknesses
+        story.append(Paragraph("Weaknesses:", styles['Heading3']))
+        for weakness in swot_analysis.get('weaknesses', ['Not available']):
+            story.append(Paragraph(f"• {weakness}", styles['Normal']))
+        story.append(Spacer(1, 10))
+        
+        # Opportunities
+        story.append(Paragraph("Opportunities:", styles['Heading3']))
+        for opportunity in swot_analysis.get('opportunities', ['Not available']):
+            story.append(Paragraph(f"• {opportunity}", styles['Normal']))
+        story.append(Spacer(1, 10))
+        
+        # Threats
+        story.append(Paragraph("Threats:", styles['Heading3']))
+        for threat in swot_analysis.get('threats', ['Not available']):
+            story.append(Paragraph(f"• {threat}", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Methodology
+        story.append(Paragraph("METHODOLOGY & ASSUMPTIONS", heading_style))
+        story.append(Paragraph("Valuation Methods Used:", styles['Heading3']))
+        story.append(Paragraph("1. Asset-Based Approach: Book value adjusted for market conditions (80% of book value)", styles['Normal']))
+        story.append(Paragraph("2. Income-Based Approach: EBITDA multiple analysis (6x industry average)", styles['Normal']))
+        story.append(Paragraph("3. Market-Based Approach: Revenue multiple analysis (1.5x conservative multiple)", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Recommendations
+        story.append(Paragraph("RECOMMENDATIONS", heading_style))
+        story.append(Paragraph(f"1. Primary Valuation: ${safe_format_number(valuation_results.get('valuation_range', {}).get('mid', 0)):,.0f}", styles['Normal']))
+        story.append(Paragraph(f"2. Negotiation Range: ${safe_format_number(valuation_results.get('valuation_range', {}).get('low', 0)):,.0f} - ${safe_format_number(valuation_results.get('valuation_range', {}).get('high', 0)):,.0f}", styles['Normal']))
+        story.append(Paragraph(f"3. Key Value Drivers: {', '.join(swot_analysis.get('value_drivers', ['Not specified']))}", styles['Normal']))
+        story.append(Paragraph(f"4. Risk Factors: {', '.join(swot_analysis.get('risk_mitigation', ['Not specified']))}", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Disclaimer
+        story.append(Paragraph("DISCLAIMER", heading_style))
+        disclaimer_text = """This valuation report is prepared for informational purposes only and should not be 
+        considered as investment advice. The analysis is based on the information provided 
+        and current market conditions. Professional consultation is recommended before 
+        making any investment decisions."""
+        story.append(Paragraph(disclaimer_text, styles['Normal']))
+        
+        # Build PDF
+        doc.build(story)
+        
+        print(f"PDF report generated: {report_path}")
+        return report_filename, report_path
+        
+    except Exception as e:
+        print(f"PDF generation error: {str(e)}")
+        # Fallback to text format
+        return generate_text_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
+
+def generate_excel_report(company_data, valuation_results, swot_analysis, data, safe_format_number):
+    """Generate Excel report using openpyxl"""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+        
+        # Create filename
+        report_filename = f"valuation_report_{company_data.get('company_name', 'company').replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
+        
+        # Create workbook and worksheet
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Valuation Report"
+        
+        # Styles
+        title_font = Font(name='Arial', size=16, bold=True, color="FFFFFF")
+        heading_font = Font(name='Arial', size=12, bold=True, color="FFFFFF")
+        normal_font = Font(name='Arial', size=10)
+        
+        title_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        heading_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        
+        # Title
+        ws['A1'] = "BUSINESS VALUATION REPORT"
+        ws['A1'].font = title_font
+        ws['A1'].fill = title_fill
+        ws.merge_cells('A1:F1')
+        ws['A1'].alignment = Alignment(horizontal='center')
+        
+        # Company Information
+        ws['A3'] = "Company:"
+        ws['B3'] = company_data.get('company_name', 'Unknown Company')
+        ws['A4'] = "Industry:"
+        ws['B4'] = company_data.get('industry', 'Not Specified')
+        ws['A5'] = "Report Date:"
+        ws['B5'] = datetime.datetime.now().strftime('%B %d, %Y at %I:%M %p')
+        
+        # Executive Summary
+        ws['A7'] = "EXECUTIVE SUMMARY"
+        ws['A7'].font = heading_font
+        ws['A7'].fill = heading_fill
+        ws.merge_cells('A7:F7')
+        ws['A8'] = data.get('executive_summary', 'Executive summary not available')
+        ws.merge_cells('A8:F8')
+        
+        # Company Overview
+        ws['A10'] = "COMPANY OVERVIEW"
+        ws['A10'].font = heading_font
+        ws['A10'].fill = heading_fill
+        ws.merge_cells('A10:F10')
+        
+        # Financial metrics table
+        financial_headers = ['Metric', 'Value']
+        financial_data = [
+            ['Annual Revenue', f"${safe_format_number(company_data.get('revenue', 0)):,.0f}"],
+            ['EBITDA', f"${safe_format_number(company_data.get('ebitda', 0)):,.0f}"],
+            ['Net Income', f"${safe_format_number(company_data.get('net_income', 0)):,.0f}"],
+            ['Total Assets', f"${safe_format_number(company_data.get('total_assets', 0)):,.0f}"],
+            ['Inventory', f"${safe_format_number(company_data.get('inventory', 0)):,.0f}"],
+            ['Accounts Receivable', f"${safe_format_number(company_data.get('accounts_receivable', 0)):,.0f}"],
+            ['Cash', f"${safe_format_number(company_data.get('cash', 0)):,.0f}"]
+        ]
+        
+        # Add headers
+        for col, header in enumerate(financial_headers, 1):
+            cell = ws.cell(row=12, column=col)
+            cell.value = header
+            cell.font = heading_font
+            cell.fill = heading_fill
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Add data
+        for row_idx, row_data in enumerate(financial_data, 13):
+            for col_idx, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.value = value
+                cell.font = normal_font
+                cell.alignment = Alignment(horizontal='center')
+        
+        # Valuation Results
+        ws['A20'] = "VALUATION RESULTS"
+        ws['A20'].font = heading_font
+        ws['A20'].fill = heading_fill
+        ws.merge_cells('A20:F20')
+        
+        valuation_headers = ['Method', 'Value']
+        valuation_data = [
+            ['Asset-Based', f"${safe_format_number(valuation_results.get('asset_based', 0)):,.0f}"],
+            ['Income-Based', f"${safe_format_number(valuation_results.get('income_based', 0)):,.0f}"],
+            ['Market-Based', f"${safe_format_number(valuation_results.get('market_based', 0)):,.0f}"],
+            ['Low Estimate', f"${safe_format_number(valuation_results.get('valuation_range', {}).get('low', 0)):,.0f}"],
+            ['Mid Estimate', f"${safe_format_number(valuation_results.get('valuation_range', {}).get('mid', 0)):,.0f}"],
+            ['High Estimate', f"${safe_format_number(valuation_results.get('valuation_range', {}).get('high', 0)):,.0f}"]
+        ]
+        
+        # Add valuation headers
+        for col, header in enumerate(valuation_headers, 1):
+            cell = ws.cell(row=22, column=col)
+            cell.value = header
+            cell.font = heading_font
+            cell.fill = heading_fill
+            cell.alignment = Alignment(horizontal='center')
+        
+        # Add valuation data
+        for row_idx, row_data in enumerate(valuation_data, 23):
+            for col_idx, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.value = value
+                cell.font = normal_font
+                cell.alignment = Alignment(horizontal='center')
+        
+        # SWOT Analysis
+        ws['A30'] = "SWOT ANALYSIS"
+        ws['A30'].font = heading_font
+        ws['A30'].fill = heading_fill
+        ws.merge_cells('A30:F30')
+        
+        # Add SWOT sections
+        swot_sections = [
+            ('Strengths', swot_analysis.get('strengths', ['Not available'])),
+            ('Weaknesses', swot_analysis.get('weaknesses', ['Not available'])),
+            ('Opportunities', swot_analysis.get('opportunities', ['Not available'])),
+            ('Threats', swot_analysis.get('threats', ['Not available']))
+        ]
+        
+        current_row = 32
+        for section_name, items in swot_sections:
+            ws[f'A{current_row}'] = section_name
+            ws[f'A{current_row}'].font = Font(bold=True)
+            current_row += 1
+            
+            for item in items:
+                ws[f'B{current_row}'] = f"• {item}"
+                current_row += 1
+            current_row += 1
+        
+        # Auto-adjust column widths
+        for column in ws.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        # Save workbook
+        wb.save(report_path)
+        
+        print(f"Excel report generated: {report_path}")
+        return report_filename, report_path
+        
+    except Exception as e:
+        print(f"Excel generation error: {str(e)}")
+        # Fallback to text format
+        return generate_text_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
+
+def generate_word_report(company_data, valuation_results, swot_analysis, data, safe_format_number):
+    """Generate Word document report using python-docx"""
+    try:
+        from docx import Document
+        from docx.shared import Inches
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.shared import OxmlElement, qn
+        
+        # Create filename
+        report_filename = f"valuation_report_{company_data.get('company_name', 'company').replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+        report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
+        
+        # Create document
+        doc = Document()
+        
+        # Title
+        title = doc.add_heading('BUSINESS VALUATION REPORT', 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Company Information
+        doc.add_heading('Company Information', level=1)
+        doc.add_paragraph(f"Company: {company_data.get('company_name', 'Unknown Company')}")
+        doc.add_paragraph(f"Industry: {company_data.get('industry', 'Not Specified')}")
+        doc.add_paragraph(f"Report Date: {datetime.datetime.now().strftime('%B %d, %Y at %I:%M %p')}")
+        
+        # Executive Summary
+        doc.add_heading('Executive Summary', level=1)
+        doc.add_paragraph(data.get('executive_summary', 'Executive summary not available'))
+        
+        # Company Overview
+        doc.add_heading('Company Overview', level=1)
+        doc.add_paragraph(f"Annual Revenue: ${safe_format_number(company_data.get('revenue', 0)):,.0f}")
+        doc.add_paragraph(f"EBITDA: ${safe_format_number(company_data.get('ebitda', 0)):,.0f}")
+        doc.add_paragraph(f"Net Income: ${safe_format_number(company_data.get('net_income', 0)):,.0f}")
+        doc.add_paragraph(f"Total Assets: ${safe_format_number(company_data.get('total_assets', 0)):,.0f}")
+        doc.add_paragraph(f"Inventory: ${safe_format_number(company_data.get('inventory', 0)):,.0f}")
+        doc.add_paragraph(f"Accounts Receivable: ${safe_format_number(company_data.get('accounts_receivable', 0)):,.0f}")
+        doc.add_paragraph(f"Cash: ${safe_format_number(company_data.get('cash', 0)):,.0f}")
+        
+        # Valuation Results
+        doc.add_heading('Valuation Results', level=1)
+        doc.add_paragraph(f"Asset-Based Valuation: ${safe_format_number(valuation_results.get('asset_based', 0)):,.0f}")
+        doc.add_paragraph(f"Income-Based Valuation: ${safe_format_number(valuation_results.get('income_based', 0)):,.0f}")
+        doc.add_paragraph(f"Market-Based Valuation: ${safe_format_number(valuation_results.get('market_based', 0)):,.0f}")
+        doc.add_paragraph(f"Low Estimate: ${safe_format_number(valuation_results.get('valuation_range', {}).get('low', 0)):,.0f}")
+        doc.add_paragraph(f"Mid Estimate: ${safe_format_number(valuation_results.get('valuation_range', {}).get('mid', 0)):,.0f}")
+        doc.add_paragraph(f"High Estimate: ${safe_format_number(valuation_results.get('valuation_range', {}).get('high', 0)):,.0f}")
+        
+        # SWOT Analysis
+        doc.add_heading('SWOT Analysis', level=1)
+        
+        # Strengths
+        doc.add_heading('Strengths', level=2)
+        for strength in swot_analysis.get('strengths', ['Not available']):
+            doc.add_paragraph(f"• {strength}")
+        
+        # Weaknesses
+        doc.add_heading('Weaknesses', level=2)
+        for weakness in swot_analysis.get('weaknesses', ['Not available']):
+            doc.add_paragraph(f"• {weakness}")
+        
+        # Opportunities
+        doc.add_heading('Opportunities', level=2)
+        for opportunity in swot_analysis.get('opportunities', ['Not available']):
+            doc.add_paragraph(f"• {opportunity}")
+        
+        # Threats
+        doc.add_heading('Threats', level=2)
+        for threat in swot_analysis.get('threats', ['Not available']):
+            doc.add_paragraph(f"• {threat}")
+        
+        # Methodology
+        doc.add_heading('Methodology & Assumptions', level=1)
+        doc.add_paragraph("Valuation Methods Used:")
+        doc.add_paragraph("1. Asset-Based Approach: Book value adjusted for market conditions (80% of book value)")
+        doc.add_paragraph("2. Income-Based Approach: EBITDA multiple analysis (6x industry average)")
+        doc.add_paragraph("3. Market-Based Approach: Revenue multiple analysis (1.5x conservative multiple)")
+        
+        # Recommendations
+        doc.add_heading('Recommendations', level=1)
+        doc.add_paragraph(f"1. Primary Valuation: ${safe_format_number(valuation_results.get('valuation_range', {}).get('mid', 0)):,.0f}")
+        doc.add_paragraph(f"2. Negotiation Range: ${safe_format_number(valuation_results.get('valuation_range', {}).get('low', 0)):,.0f} - ${safe_format_number(valuation_results.get('valuation_range', {}).get('high', 0)):,.0f}")
+        doc.add_paragraph(f"3. Key Value Drivers: {', '.join(swot_analysis.get('value_drivers', ['Not specified']))}")
+        doc.add_paragraph(f"4. Risk Factors: {', '.join(swot_analysis.get('risk_mitigation', ['Not specified']))}")
+        
+        # Disclaimer
+        doc.add_heading('Disclaimer', level=1)
+        disclaimer_text = """This valuation report is prepared for informational purposes only and should not be 
+        considered as investment advice. The analysis is based on the information provided 
+        and current market conditions. Professional consultation is recommended before 
+        making any investment decisions."""
+        doc.add_paragraph(disclaimer_text)
+        
+        # Save document
+        doc.save(report_path)
+        
+        print(f"Word report generated: {report_path}")
+        return report_filename, report_path
+        
+    except Exception as e:
+        print(f"Word generation error: {str(e)}")
+        # Fallback to text format
+        return generate_text_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
+
+def generate_text_report(company_data, valuation_results, swot_analysis, data, safe_format_number):
+    """Generate text report as fallback"""
+    try:
+        # Create filename
+        report_filename = f"valuation_report_{company_data.get('company_name', 'company').replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
         
         # Create comprehensive report content
         report_content = f"""
@@ -466,23 +1573,15 @@ Valuation Platform: Business Valuation Platform v1.0
         """
         
         # Save report to file
-        report_filename = f"valuation_report_{company_data.get('company_name', 'company').replace(' ', '_')}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        report_path = os.path.join(app.config['REPORTS_FOLDER'], report_filename)
-        
         with open(report_path, 'w') as f:
             f.write(report_content)
         
-        return jsonify({
-            'status': 'success',
-            'report_filename': report_filename,
-            'report_path': report_path,
-            'download_url': f'/api/report/download/{report_filename}',
-            'message': 'Comprehensive valuation report generated successfully'
-        })
+        print(f"Text report generated: {report_path}")
+        return report_filename, report_path
         
     except Exception as e:
-        print(f"Report generation error: {str(e)}")
-        return jsonify({'error': f'Report generation failed: {str(e)}'}), 500
+        print(f"Text report generation error: {str(e)}")
+        raise e
 
 @app.route('/api/report/download/<filename>', methods=['GET'])
 def download_report(filename):
