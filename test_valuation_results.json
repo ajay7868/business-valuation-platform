@@ -1,0 +1,51 @@
+{
+  "asset_based": 4300000.0,
+  "income_based": {
+    "dcf_value": 12588888.888888884,
+    "capitalization_value": 9166666.666666668,
+    "projected_flows": [
+      1133000.0,
+      1166990.0,
+      1201999.7,
+      1238059.691,
+      1275201.48173
+    ],
+    "terminal_value": 14593972.513132224
+  },
+  "market_based": {
+    "revenue_multiple": 8720000.0,
+    "ebitda_multiple": 4950000.0,
+    "sde_multiple": 3520000.0,
+    "multiples_used": {
+      "revenue": 0.8,
+      "ebitda": 4.5,
+      "sde": 3.2
+    }
+  },
+  "valuation_range": {
+    "low": 2992000.0,
+    "mid": 7207592.592592592,
+    "high": 14477222.222222216
+  },
+  "all_estimates": [
+    4300000.0,
+    12588888.888888884,
+    9166666.666666668,
+    8720000.0,
+    4950000.0,
+    3520000.0
+  ],
+  "anomalies": [],
+  "valuation_date": "2025-09-02T12:38:25.013772",
+  "methodology_notes": {
+    "asset_based": "Book value adjusted for market conditions, equipment at 60% of book",
+    "dcf": "Discounted Cash Flow with 3% growth, 12% discount rate",
+    "market_multiples": "Industry multiples for manufacturing",
+    "assumptions": [
+      "Growth rate: 3% annually",
+      "Discount rate: 12%",
+      "Terminal growth: 3%",
+      "Equipment depreciation: 40%"
+    ]
+  }
+}

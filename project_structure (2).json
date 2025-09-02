@@ -1,0 +1,53 @@
+{
+  "business-valuation-platform/": {
+    "backend/": {
+      "app.py": "# Main Flask application",
+      "requirements.txt": "# Python dependencies",
+      "config.py": "# Configuration settings",
+      "models/": {
+        "__init__.py": "",
+        "valuation_engine.py": "# Core valuation logic",
+        "data_extractor.py": "# PDF/Excel extraction",
+        "report_generator.py": "# PDF/Word report generation"
+      },
+      "routes/": {
+        "__init__.py": "",
+        "api.py": "# API endpoints",
+        "auth.py": "# Authentication routes"
+      },
+      "utils/": {
+        "__init__.py": "",
+        "helpers.py": "# Utility functions",
+        "validators.py": "# Data validation"
+      },
+      "uploads/": "# File upload directory",
+      "reports/": "# Generated reports directory",
+      ".env": "# Environment variables"
+    },
+    "frontend/": {
+      "package.json": "# Node.js dependencies",
+      "src/": {
+        "App.jsx": "# Main React component",
+        "index.js": "# React entry point",
+        "components/": {
+          "Dashboard.jsx": "# Main dashboard",
+          "FileUpload.jsx": "# File upload component",
+          "ValuationResults.jsx": "# Results display",
+          "ReportGenerator.jsx": "# Report generation",
+          "SWOTAnalysis.jsx": "# SWOT display/edit"
+        },
+        "services/": {
+          "api.js": "# API service functions"
+        },
+        "styles/": {
+          "App.css": "# Main styles"
+        }
+      },
+      "public/": {
+        "index.html": "# HTML template"
+      }
+    },
+    "README.md": "# Project documentation",
+    "docker-compose.yml": "# Docker setup (optional)"
+  }
+}
