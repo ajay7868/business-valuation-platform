@@ -9,9 +9,7 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "build",
-        "installCommand": "npm ci --prefer-offline --no-audit",
-        "buildCommand": "npm run build"
+        "distDir": "build"
       }
     }
   ],
