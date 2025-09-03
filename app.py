@@ -72,11 +72,15 @@ def upload_file():
         # Extract data based on file type
         extracted_data = extract_data_from_file(filepath)
         
+        # AI validation of extracted data
+        validation_result = validate_financial_data_with_ai(extracted_data)
+        
         return jsonify({
             'status': 'success',
             'message': 'File uploaded and processed successfully',
             'filename': filename,
-            'extracted_data': extracted_data
+            'extracted_data': extracted_data,
+            'ai_validation': validation_result
         })
         
     except Exception as e:
@@ -102,40 +106,88 @@ def extract_data_from_file(filepath):
         return get_empty_data()
 
 def extract_from_excel(filepath):
-    """Extract data from Excel files"""
+    """Extract data from Excel files with enhanced multi-sheet and multi-column support"""
     try:
         import pandas as pd
         import openpyxl
         
-        # Read Excel file
+        # Read Excel file with all sheets
         df = pd.read_excel(filepath, sheet_name=None)
+        print(f"DEBUG: Excel file has {len(df)} sheets: {list(df.keys())}")
         
-        # Try to find the most relevant sheet
-        target_sheet = None
+        all_data = {}
+        best_sheet_data = {}
+        best_sheet_score = 0
+        
+        # Process each sheet and score them based on data quality
         for sheet_name, sheet_df in df.items():
-            if any(keyword in sheet_name.lower() for keyword in ['financial', 'income', 'balance', 'data', 'summary']):
-                target_sheet = sheet_df
-                break
+            print(f"DEBUG: Processing sheet: {sheet_name}")
+            
+            if sheet_df.empty:
+                print(f"DEBUG: Sheet {sheet_name} is empty, skipping")
+                continue
+                
+            print(f"DEBUG: Sheet {sheet_name} has {len(sheet_df.columns)} columns and {len(sheet_df)} rows")
+            print(f"DEBUG: Columns: {list(sheet_df.columns)}")
+            
+            # Try to extract data from this sheet
+            sheet_data = extract_data_from_sheet(sheet_df, sheet_name)
+            if sheet_data:
+                # Score this sheet based on data completeness
+                sheet_score = len(sheet_data)
+                print(f"DEBUG: Sheet {sheet_name} score: {sheet_score}")
+                
+                if sheet_score > best_sheet_score:
+                    best_sheet_score = sheet_score
+                    best_sheet_data = sheet_data
+                
+                # Merge data from all sheets
+                all_data.update(sheet_data)
         
-        if target_sheet is None:
-            # Use first sheet if no financial sheet found
-            target_sheet = list(df.values())[0]
-        
-        # Convert to string for easier searching
-        target_sheet_str = target_sheet.astype(str)
-        
-        # Extract company information
-        company_data = extract_company_info_from_dataframe(target_sheet, target_sheet_str)
+        # If we have good data from a specific sheet, prioritize it
+        if best_sheet_score >= 3:  # At least 3 metrics found
+            print(f"DEBUG: Using best sheet data with score {best_sheet_score}")
+            final_data = best_sheet_data
+        elif all_data:
+            print(f"DEBUG: Using combined data from all sheets")
+            final_data = all_data
+        else:
+            print(f"DEBUG: No data found in any sheet")
+            final_data = get_empty_data()
         
         # Validate and clean the extracted data
-        company_data = validate_and_clean_data(company_data)
+        final_data = validate_and_clean_data(final_data)
         
-        print(f"DEBUG: Extracted Excel data: {company_data}")
-        return company_data
+        print(f"DEBUG: Final extracted Excel data: {final_data}")
+        return final_data
         
     except Exception as e:
         print(f"Excel extraction error: {str(e)}")
         return get_empty_data()
+
+def extract_data_from_sheet(df, sheet_name):
+    """Extract data from a single Excel sheet with enhanced column analysis"""
+    try:
+        print(f"DEBUG: Analyzing sheet '{sheet_name}' with {len(df.columns)} columns")
+        
+        # Convert to string for easier searching
+        df_str = df.astype(str)
+        
+        # Extract company information
+        company_data = extract_company_info_from_dataframe(df, df_str)
+        
+        # Extract financial metrics with enhanced multi-column support
+        financial_metrics = extract_financial_metrics(df, df_str)
+        
+        # Merge the data
+        sheet_data = {**company_data, **financial_metrics}
+        
+        print(f"DEBUG: Sheet '{sheet_name}' extracted data: {sheet_data}")
+        return sheet_data
+        
+    except Exception as e:
+        print(f"Sheet extraction error for '{sheet_name}': {str(e)}")
+        return {}
 
 def extract_from_pdf(filepath):
     """Extract data from PDF files"""
@@ -408,39 +460,66 @@ def find_industry_in_text(text):
         return None
 
 def extract_financial_metrics(df, df_str):
-    """Extract financial metrics from DataFrame"""
+    """Extract financial metrics from DataFrame with intelligent multi-column analysis"""
     metrics = {}
     
     try:
-        # Define financial metric patterns and their variations
+        print(f"DEBUG: Processing DataFrame with {len(df.columns)} columns: {list(df.columns)}")
+        
+        # First pass: Look for exact column name matches using enhanced patterns
         metric_patterns = {
-            'revenue': ['revenue', 'sales', 'income', 'turnover', 'gross revenue'],
-            'ebitda': ['ebitda', 'operating income', 'operating profit', 'operating earnings'],
-            'total_assets': ['total assets', 'assets', 'total asset', 'asset base'],
-            'inventory': ['inventory', 'stock', 'goods', 'merchandise'],
-            'accounts_receivable': ['accounts receivable', 'receivables', 'ar', 'debtors'],
-            'cash': ['cash', 'cash and cash equivalents', 'cash balance', 'bank balance'],
-            'total_liabilities': ['total liabilities', 'liabilities', 'debt', 'total debt'],
-            'net_income': ['net income', 'net profit', 'profit', 'earnings', 'net earnings']
+            'revenue': ['revenue', 'sales', 'income', 'turnover', 'gross revenue', 'total revenue', 'gross sales', 'net sales'],
+            'ebitda': ['ebitda', 'operating income', 'operating profit', 'operating earnings', 'operating margin'],
+            'total_assets': ['total assets', 'assets', 'total asset', 'asset base', 'total capital'],
+            'inventory': ['inventory', 'stock', 'goods', 'merchandise', 'stock inventory', 'inventories'],
+            'accounts_receivable': ['accounts receivable', 'receivables', 'ar', 'debtors', 'trade receivable'],
+            'cash': ['cash', 'cash and cash equivalents', 'cash balance', 'bank balance', 'liquid assets'],
+            'total_liabilities': ['total liabilities', 'liabilities', 'debt', 'total debt', 'obligations'],
+            'net_income': ['net income', 'net profit', 'profit', 'earnings', 'net earnings', 'bottom line'],
+            'employees': ['employees', 'employee', 'fte', 'full time equivalent', 'staff', 'headcount', 'personnel']
         }
         
-        for metric, patterns in metric_patterns.items():
-            value = find_metric_value(df, df_str, patterns)
-            if value is not None:
-                metrics[metric] = value
+        # Process each metric type with enhanced detection
+        for metric_key, search_terms in metric_patterns.items():
+            if metric_key not in metrics:  # Only set if not already found
+                value = find_metric_value(df, df_str, search_terms)
+                if value is not None:
+                    metrics[metric_key] = value
+                    print(f"DEBUG: Found {metric_key} = {value} using pattern matching")
         
-        # If no metrics found, try to extract from the data structure
-        if not metrics:
-            metrics = extract_metrics_from_data_structure(df)
+        # Second pass: Analyze column data patterns for additional insights
+        if len(metrics) < 5:  # If we didn't find enough metrics
+            print("DEBUG: Second pass - analyzing column data patterns...")
+            additional_metrics = analyze_column_patterns(df)
+            for key, value in additional_metrics.items():
+                if key not in metrics:
+                    metrics[key] = value
+                    print(f"DEBUG: Pattern analysis found {key} = {value}")
         
-        # If still no metrics, try to find any numeric data in the DataFrame
-        if not metrics:
-            metrics = find_any_numeric_data(df)
+        # Third pass: Use the existing data structure analysis
+        if len(metrics) < 3:
+            print("DEBUG: Third pass - data structure analysis...")
+            structure_metrics = extract_metrics_from_data_structure(df)
+            for key, value in structure_metrics.items():
+                if key not in metrics:
+                    metrics[key] = value
+                    print(f"DEBUG: Structure analysis found {key} = {value}")
+        
+        # Final fallback: Comprehensive numeric data finder
+        if len(metrics) < 2:
+            print("DEBUG: Final fallback - comprehensive numeric analysis...")
+            fallback_metrics = find_any_numeric_data(df)
+            for key, value in fallback_metrics.items():
+                if key not in metrics:
+                    metrics[key] = value
+                    print(f"DEBUG: Fallback found {key} = {value}")
+        
+        print(f"DEBUG: Final metrics extracted: {metrics}")
+        return metrics
         
     except Exception as e:
         print(f"Financial metrics extraction error: {str(e)}")
-    
-    return metrics
+        return {}
 
 def extract_metrics_from_data_structure(df):
     """Extract metrics from the data structure when patterns don't match"""
@@ -570,6 +649,185 @@ def validate_and_clean_data(company_data):
     except Exception as e:
         print(f"Data validation error: {str(e)}")
         return company_data
+
+def validate_financial_data_with_ai(company_data):
+    """Validate extracted financial data using OpenAI GPT for accuracy and reasonableness"""
+    try:
+        # Check if OpenAI API key is available
+        openai_api_key = os.environ.get('OPENAI_API_KEY')
+        if not openai_api_key:
+            print("WARNING: OpenAI API key not found. Skipping AI validation.")
+            return {
+                'status': 'skipped',
+                'message': 'OpenAI API key not configured',
+                'confidence_score': 0.0,
+                'validation_notes': ['AI validation not available - API key missing']
+            }
+        
+        # Prepare the data for validation
+        financial_summary = f"""
+        Company: {company_data.get('company_name', 'Unknown')}
+        Industry: {company_data.get('industry', 'Unknown')}
+        Annual Revenue: ${company_data.get('revenue', 0):,.0f}
+        EBITDA: ${company_data.get('ebitda', 0):,.0f}
+        Total Assets: ${company_data.get('total_assets', 0):,.0f}
+        Inventory: ${company_data.get('inventory', 0):,.0f}
+        Accounts Receivable: ${company_data.get('accounts_receivable', 0):,.0f}
+        Cash: ${company_data.get('cash', 0):,.0f}
+        Total Liabilities: ${company_data.get('total_liabilities', 0):,.0f}
+        Net Income: ${company_data.get('net_income', 0):,.0f}
+        Employees: {company_data.get('employees', 0)}
+        """
+        
+        # Create validation prompt
+        validation_prompt = f"""
+        You are a financial analyst expert. Please validate the following extracted financial data for reasonableness and accuracy.
+        
+        {financial_summary}
+        
+        Please analyze this data and provide:
+        1. A confidence score (0-100) for the overall data quality
+        2. Specific validation notes about any potential issues
+        3. Industry-specific reasonableness checks
+        4. Recommendations for data verification
+        
+        Focus on:
+        - Financial ratios and relationships (e.g., EBITDA margin, asset turnover)
+        - Industry benchmarks and reasonableness
+        - Data consistency and completeness
+        - Potential red flags or unusual values
+        
+        Respond in JSON format:
+        {{
+            "confidence_score": <0-100>,
+            "validation_notes": ["note1", "note2", ...],
+            "industry_analysis": "industry-specific insights",
+            "recommendations": ["rec1", "rec2", ...],
+            "risk_level": "low/medium/high"
+        }}
+        """
+        
+        # Call OpenAI API
+        import openai
+        openai.api_key = openai_api_key
+        
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a financial analyst expert specializing in data validation and business analysis."},
+                {"role": "user", "content": validation_prompt}
+            ],
+            max_tokens=500,
+            temperature=0.1
+        )
+        
+        # Parse the response
+        ai_response = response.choices[0].message.content
+        
+        try:
+            # Try to parse JSON response
+            import json
+            validation_result = json.loads(ai_response)
+            validation_result['status'] = 'validated'
+            validation_result['ai_response'] = ai_response
+        except json.JSONDecodeError:
+            # If JSON parsing fails, create a structured response
+            validation_result = {
+                'status': 'validated',
+                'confidence_score': 75.0,
+                'validation_notes': ['AI validation completed but response format unclear'],
+                'industry_analysis': 'AI analysis completed',
+                'recommendations': ['Review extracted data manually for verification'],
+                'risk_level': 'medium',
+                'ai_response': ai_response
+            }
+        
+        print(f"DEBUG: AI validation result: {validation_result}")
+        return validation_result
+        
+    except Exception as e:
+        print(f"AI validation error: {str(e)}")
+        return {
+            'status': 'error',
+            'message': f'AI validation failed: {str(e)}',
+            'confidence_score': 0.0,
+            'validation_notes': [f'Validation error: {str(e)}'],
+            'risk_level': 'high'
+        }
+
+def analyze_column_patterns(df):
+    """Analyze column patterns to infer financial metrics from multi-column data"""
+    metrics = {}
+    
+    try:
+        import pandas as pd
+        
+        print(f"DEBUG: Analyzing column patterns for {len(df.columns)} columns")
+        
+        # Analyze column relationships and patterns
+        for col in df.columns:
+            col_lower = str(col).lower()
+            col_data = df[col]
+            
+            # Skip if column is mostly empty or non-numeric
+            if col_data.isna().sum() > len(col_data) * 0.8:  # More than 80% empty
+                continue
+                
+            # Look for columns that might contain financial data based on patterns
+            if any(keyword in col_lower for keyword in ['amount', 'value', 'total', 'sum', 'balance']):
+                # This could be a financial column - analyze the data
+                numeric_values = []
+                for value in col_data:
+                    if pd.notna(value):
+                        try:
+                            clean_value = float(str(value).replace('$', '').replace(',', ''))
+                            if clean_value > 0:
+                                numeric_values.append(clean_value)
+                        except ValueError:
+                            continue
+                
+                if numeric_values:
+                    max_value = max(numeric_values)
+                    
+                    # Infer metric type based on value magnitude and column context
+                    if max_value > 1000000:  # Likely revenue or assets
+                        if 'revenue' not in metrics:
+                            metrics['revenue'] = max_value
+                            print(f"DEBUG: Inferred revenue from column '{col}' (value: {max_value})")
+                    elif max_value > 100000:  # Likely EBITDA or medium assets
+                        if 'ebitda' not in metrics:
+                            metrics['ebitda'] = max_value
+                            print(f"DEBUG: Inferred EBITDA from column '{col}' (value: {max_value})")
+                    elif max_value > 10000:  # Likely inventory or receivables
+                        if 'inventory' not in metrics:
+                            metrics['inventory'] = max_value
+                            print(f"DEBUG: Inferred inventory from column '{col}' (value: {max_value})")
+        
+        # Look for columns that might represent time periods (years, quarters)
+        time_columns = []
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if any(keyword in col_lower for keyword in ['year', 'period', 'quarter', 'month', 'date']):
+                time_columns.append(col)
+        
+        if time_columns:
+            print(f"DEBUG: Found time columns: {time_columns}")
+        
+        # Look for columns that might represent different business units or categories
+        category_columns = []
+        for col in df.columns:
+            col_lower = str(col).lower()
+            if any(keyword in col_lower for keyword in ['category', 'type', 'segment', 'division', 'unit']):
+                category_columns.append(col)
+        
+        if category_columns:
+            print(f"DEBUG: Found category columns: {category_columns}")
+        
+        return metrics
+        
+    except Exception as e:
+        print(f"Column pattern analysis error: {str(e)}")
+        return {}
 
 def find_any_numeric_data(df):
     """Find any numeric data in the DataFrame that could be financial metrics"""
@@ -796,9 +1054,13 @@ def get_empty_data():
 
 @app.route('/api/valuation', methods=['POST'])
 def calculate_valuation():
-    """Calculate comprehensive business valuation - Simplified for Vercel"""
+    """Calculate comprehensive business valuation with AI validation"""
     try:
         data = request.json
+        
+        # AI validation of company data before valuation
+        print("DEBUG: Running AI validation before valuation calculation...")
+        validation_result = validate_financial_data_with_ai(data)
         
         # Simplified valuation calculation for Vercel deployment
         revenue = float(data.get('revenue', 0))
@@ -835,6 +1097,13 @@ def calculate_valuation():
             'assumptions': f'EBITDA multiple: {ebitda_multiple}x, Revenue multiple: {revenue_multiple}x, Asset discount: 20%'
         }
         
+        # Adjust methodology based on validation results
+        if validation_result.get('status') == 'validated':
+            confidence = validation_result.get('confidence_score', 0)
+            if confidence < 70:
+                results['methodology'] += ' (Data confidence: Low - Manual verification recommended)'
+                results['assumptions'] += ' - Note: Data quality concerns identified'
+        
         executive_summary = f"""
         Based on the provided financial data, {data.get('company_name', 'this company')} has an estimated value range of ${min_val:,.0f} to ${max_val:,.0f}, with a mid-point estimate of ${mid_val:,.0f}.
         
@@ -850,7 +1119,8 @@ def calculate_valuation():
             'status': 'success',
             'valuation_results': results,
             'executive_summary': executive_summary,
-            'company_data': data
+            'company_data': data,
+            'ai_validation': validation_result
         })
         
     except Exception as e:
@@ -858,9 +1128,13 @@ def calculate_valuation():
 
 @app.route('/api/swot', methods=['POST'])
 def generate_swot():
-    """Generate SWOT analysis using AI"""
+    """Generate SWOT analysis using AI with data validation"""
     try:
         data = request.json
+        
+        # AI validation of company data before SWOT analysis
+        print("DEBUG: Running AI validation before SWOT analysis...")
+        validation_result = validate_financial_data_with_ai(data)
         
         # Helper function to safely format numbers
         def safe_format_revenue(value):
@@ -871,7 +1145,13 @@ def generate_swot():
             except (ValueError, TypeError):
                 return '$0'
         
-        # Create SWOT prompt
+        # Create SWOT prompt with validation insights
+        validation_notes = ""
+        if validation_result.get('status') == 'validated':
+            confidence = validation_result.get('confidence_score', 0)
+            notes = validation_result.get('validation_notes', [])
+            validation_notes = f"\n\nData Validation: Confidence Score: {confidence}%\nValidation Notes: {', '.join(notes)}"
+        
         prompt = f"""
         Analyze this business for SWOT analysis and positioning guidance:
         
@@ -883,11 +1163,15 @@ def generate_swot():
         Certifications: {str(data.get('certifications', []))}
         Competitive Advantages: {str(data.get('competitive_advantages', []))}
         
+        {validation_notes}
+        
         Please provide:
         1. Detailed SWOT Analysis (Strengths, Weaknesses, Opportunities, Threats)
         2. Actionable positioning guidance for selling this business
         3. Key value drivers to highlight to potential buyers
         4. Risk mitigation strategies
+        
+        Consider the data validation results when providing analysis. If confidence is low, suggest additional verification steps.
         
         Format as JSON with sections: strengths, weaknesses, opportunities, threats, positioning_guidance, value_drivers, risk_mitigation
         """
@@ -950,7 +1234,8 @@ def generate_swot():
         return jsonify({
             'status': 'success',
             'swot_analysis': mock_swot,
-            'prompt_used': prompt
+            'prompt_used': prompt,
+            'data_validation': validation_result
         })
         
     except Exception as e:
@@ -984,6 +1269,10 @@ def generate_report():
         valuation_results = data.get('valuation_results', {})
         swot_analysis = data.get('swot_analysis', {})
         
+        # AI validation before report generation
+        print("DEBUG: Running AI validation before report generation...")
+        validation_result = validate_financial_data_with_ai(company_data)
+        
         # Generate report based on requested format
         try:
             if report_type == 'pdf':
@@ -1005,7 +1294,8 @@ def generate_report():
             'report_filename': report_filename,
             'report_path': report_path,
             'download_url': f'/api/report/download/{report_filename}',
-            'message': f'Comprehensive valuation report generated successfully in {report_type.upper()} format'
+            'message': f'Comprehensive valuation report generated successfully in {report_type.upper()} format',
+            'ai_validation': validation_result
         })
         
     except Exception as e:

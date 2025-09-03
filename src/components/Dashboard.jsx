@@ -162,6 +162,31 @@ function Dashboard({
                 </div>
               </div>
 
+              <div className="row">
+                <div className="col-md-6 mb-3">
+                  <label className="form-label">Cash ($)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    name="cash"
+                    value={companyData.cash || ''}
+                    onChange={handleInputChange}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="col-md-6 mb-3">
+                  <label className="form-label">Net Income ($)</label>
+                  <input
+                    type="number"
+                    className="form-control"
+                    name="net_income"
+                    value={companyData.net_income || ''}
+                    onChange={handleInputChange}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
               <div className="mb-3">
                 <label className="form-label">Number of Employees</label>
                 <input
@@ -199,6 +224,8 @@ function Dashboard({
             >
               {loading ? 'Calculating...' : 'Calculate Valuation'}
             </button>
+
+
 
             <div className="d-flex justify-content-between">
               <button className="btn btn-secondary" onClick={onPrev}>

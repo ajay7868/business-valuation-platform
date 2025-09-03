@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -40,7 +40,9 @@ function App() {
         return (
           <FileUpload 
             onNext={nextStep}
-            onDataExtracted={(data) => setCompanyData({...companyData, ...data})}
+            onDataExtracted={(data) => {
+              setCompanyData(prevData => ({...prevData, ...data}));
+            }}
           />
         );
       case 2:
