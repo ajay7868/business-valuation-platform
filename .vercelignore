@@ -1,53 +1,53 @@
-# Virtual environment
+# Ignore development files
 venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 env/
 .venv/
-
-# Node modules (not needed for Python backend)
-node_modules/
-
-# Large files
-*.pdf
-*.xlsx
-*.xls
-*.doc
-*.docx
-
-# Upload and report directories
-uploads/
-reports/
-
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Development files
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# IDE files
+# Ignore old app files that might cause conflicts
+app.py
+app_sqlite.py
+app_vercel.py
+
+# Ignore test files
+test_*.py
+*_test.py
+
+# Ignore documentation
+*.md
+!README.md
+
+# Ignore uploads and reports
+uploads/
+reports/
+logs/
+
+# Ignore git
+.git/
+.gitignore
+
+# Ignore node modules (will be installed fresh)
+node_modules/
+
+# Ignore build artifacts
+build/
+dist/
+
+# Ignore IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS files
+# Ignore OS files
 .DS_Store
 Thumbs.db
-
-# Git
-.git/
-.gitignore
-
-# Docker
-Dockerfile*
-docker-compose.yml
-
-# Test files
-test_valuation_results.json
-project_structure*.json
-file_list.txt
