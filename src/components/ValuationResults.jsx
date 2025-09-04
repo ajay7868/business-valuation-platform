@@ -76,18 +76,18 @@ function ValuationResults({
               <div className="row">
                 <div className="col-md-6">
                   <h6>Company: {valuationResults.company_name}</h6>
-                  <p className="mb-2"><strong>Calculated Value:</strong> ${valuationResults.calculated_value.toLocaleString()}</p>
+                  <p className="mb-2"><strong>Calculated Value:</strong> ${(valuationResults.calculated_value || 0).toLocaleString()}</p>
                   <p className="mb-2"><strong>Method:</strong> {valuationResults.method}</p>
                   {valuationResults.ebitda_multiple && (
                     <p className="mb-2"><strong>EBITDA Multiple:</strong> {valuationResults.ebitda_multiple}x</p>
                   )}
                   {valuationResults.asset_value && (
-                    <p className="mb-2"><strong>Asset Value:</strong> ${valuationResults.asset_value.toLocaleString()}</p>
+                    <p className="mb-2"><strong>Asset Value:</strong> ${(valuationResults.asset_value || 0).toLocaleString()}</p>
                   )}
                 </div>
                 <div className="col-md-6">
                   <p className="mb-0 text-muted">
-                    <small>Calculated: {new Date(valuationResults.calculated_at).toLocaleString()}</small>
+                    <small>Calculated: {valuationResults.calculated_at ? new Date(valuationResults.calculated_at).toLocaleString() : 'Unknown'}</small>
                   </p>
                 </div>
               </div>
