@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { calculateValuation, generateSWOT } from '../services/api';
 
@@ -8,10 +8,25 @@ function Dashboard({
   onNext, 
   onPrev, 
   setValuationResults, 
-  setSwotAnalysis 
+  setSwotAnalysis,
+  extractedData 
 }) {
+  
   const [loading, setLoading] = useState(false);
   const [swotLoading, setSwotLoading] = useState(false);
+  const [valuationResults, setValuationResultsLocal] = useState(null);
+  
+  // Add useEffect to track companyData changes and auto-fill form
+  useEffect(() => {
+   
+    // Show success message when data is auto-filled from file upload
+    if (companyData && Object.keys(companyData).length > 0) {
+      const hasFinancialData = companyData.revenue || companyData.ebitda || companyData.net_income;
+      if (hasFinancialData) {
+        //toast.success('auto-filled with data from uploaded file! Please fill rest fields for better results');
+      }
+    }
+  }, [companyData]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -21,14 +36,30 @@ function Dashboard({
     });
   };
 
+  // Helper function to check if a field has auto-filled data
+  const isFieldAutoFilled = (fieldName) => {
+    return companyData[fieldName] && companyData[fieldName] !== '';
+  };
+
+  // Helper function to get field styling for auto-filled fields
+  const getFieldClassName = (fieldName) => {
+    const baseClass = "form-control";
+    return isFieldAutoFilled(fieldName) ? `${baseClass} border-success` : baseClass;
+  };
+
   const handleValuation = async () => {
     setLoading(true);
     try {
       const response = await calculateValuation(companyData);
-      setValuationResults(response.valuation_results);
+      setValuationResultsLocal(response.valuation_results);
+      // Also update the parent component's state
+      if (setValuationResults) {
+        setValuationResults(response.valuation_results);
+      }
       toast.success('Valuation completed successfully!');
-      onNext();
+      // Don't auto-navigate, let user see results first
     } catch (error) {
+      console.error('💰 Valuation error:', error);
       toast.error('Valuation failed: ' + error.message);
     } finally {
       setLoading(false);
@@ -36,11 +67,26 @@ function Dashboard({
   };
 
   const handleGenerateSWOT = async () => {
+    // Check if we have meaningful data for SWOT analysis
+    const hasData = companyData.company_name && 
+                   (companyData.revenue || companyData.ebitda || companyData.net_income);
+    
+    if (!hasData) {
+      toast.warning('Please provide company name and at least one financial metric (revenue, EBITDA, or net income) before generating SWOT analysis.');
+      return;
+    }
+    
     setSwotLoading(true);
     try {
-      const response = await generateSWOT(companyData);
+      // Prepare data for SWOT analysis - include extracted data if available
+      const swotData = {
+        ...companyData,
+        extracted_data: extractedData || null
+      };
+      
+      const response = await generateSWOT(swotData);
       setSwotAnalysis(response.swot_analysis);
-      toast.success('SWOT analysis generated!');
+      toast.success('SWOT analysis generated successfully!');
     } catch (error) {
       toast.error('SWOT generation failed: ' + error.message);
     } finally {
@@ -54,25 +100,44 @@ function Dashboard({
         <div className="card">
           <div className="card-header">
             <h5>Company Information</h5>
+            {/* Debug: Show received data */}
+            {/* {Object.keys(companyData).length > 0 && (
+              <div className="alert alert-info mt-2">
+                <small>
+                  <strong>Debug - Received Data:</strong> {JSON.stringify(companyData, null, 2)}
+                </small>
+              </div>
+            )} */}
           </div>
           <div className="card-body">
             <form>
               <div className="row">
                 <div className="col-md-6 mb-3">
-                  <label className="form-label">Company Name</label>
+                  {/* <label className="form-label">
+                    Company Name
+                    {isFieldAutoFilled('company_name') && (
+                      <span className="badge bg-success ms-2">Auto-filled</span>
+                    )}
+                  </label> */}
                   <input
                     type="text"
-                    className="form-control"
+                    className={getFieldClassName('company_name')}
                     name="company_name"
                     value={companyData.company_name || ''}
                     onChange={handleInputChange}
                     placeholder="Enter company name"
+                    onFocus={() => {}}
                   />
                 </div>
                 <div className="col-md-6 mb-3">
-                  <label className="form-label">Industry</label>
+                  {/* <label className="form-label">
+                    Industry
+                    {isFieldAutoFilled('industry') && (
+                      <span className="badge bg-success ms-2">Auto-filled</span>
+                    )}
+                  </label> */}
                   <select
-                    className="form-control"
+                    className={getFieldClassName('industry')}
                     name="industry"
                     value={companyData.industry || ''}
                     onChange={handleInputChange}
@@ -89,10 +154,15 @@ function Dashboard({
 
               <div className="row">
                 <div className="col-md-6 mb-3">
-                  <label className="form-label">Annual Revenue ($)</label>
+                  <label className="form-label">
+                    Annual Revenue ($)
+                    {/* {isFieldAutoFilled('revenue') && (
+                      <span className="badge bg-success ms-2">Auto-filled</span>
+                    )} */}
+                  </label>
                   <input
                     type="number"
-                    className="form-control"
+                    className={getFieldClassName('revenue')}
                     name="revenue"
                     value={companyData.revenue || ''}
                     onChange={handleInputChange}
@@ -100,10 +170,15 @@ function Dashboard({
                   />
                 </div>
                 <div className="col-md-6 mb-3">
-                  <label className="form-label">EBITDA ($)</label>
+                  <label className="form-label">
+                    EBITDA ($)
+                    {isFieldAutoFilled('ebitda') && (
+                      <span className="badge bg-success ms-2">Auto-filled</span>
+                    )}
+                  </label>
                   <input
                     type="number"
-                    className="form-control"
+                    className={getFieldClassName('ebitda')}
                     name="ebitda"
                     value={companyData.ebitda || ''}
                     onChange={handleInputChange}
@@ -210,11 +285,25 @@ function Dashboard({
           </div>
           <div className="card-body">
             <button
-              className="btn btn-info btn-block mb-3"
+              className={`btn btn-block mb-3 ${
+                companyData.company_name && (companyData.revenue || companyData.ebitda || companyData.net_income)
+                  ? 'btn-info' 
+                  : 'btn-outline-secondary'
+              }`}
               onClick={handleGenerateSWOT}
-              disabled={swotLoading}
+              disabled={swotLoading || !companyData.company_name || (!companyData.revenue && !companyData.ebitda && !companyData.net_income)}
+              title={
+                !companyData.company_name 
+                  ? 'Please enter company name first'
+                  : (!companyData.revenue && !companyData.ebitda && !companyData.net_income)
+                  ? 'Please provide at least one financial metric (revenue, EBITDA, or net income)'
+                  : 'Generate intelligent SWOT analysis based on your data'
+              }
             >
               {swotLoading ? 'Generating...' : 'Generate SWOT Analysis'}
+              {companyData.company_name && (companyData.revenue || companyData.ebitda || companyData.net_income) && (
+                <span className="badge bg-success ms-2">Ready</span>
+              )}
             </button>
 
             <button
@@ -245,6 +334,38 @@ function Dashboard({
               <p><strong>EBITDA:</strong> ${parseInt(companyData.ebitda || 0).toLocaleString()}</p>
               <p><strong>Employees:</strong> {companyData.employees || 'N/A'}</p>
               <p><strong>Industry:</strong> {companyData.industry || 'N/A'}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Valuation Results Summary */}
+        {valuationResults && (
+          <div className="card mt-3">
+            <div className="card-header bg-success text-white">
+              <h6 className="mb-0">✅ Valuation Complete</h6>
+            </div>
+            <div className="card-body">
+              <div className="alert alert-success">
+                <h6>Company: {valuationResults.company_name}</h6>
+                <p className="mb-2"><strong>Calculated Value:</strong> ${valuationResults.calculated_value.toLocaleString()}</p>
+                <p className="mb-2"><strong>Method:</strong> {valuationResults.method}</p>
+                <p className="mb-0 text-muted"><small>Calculated: {new Date(valuationResults.calculated_at).toLocaleString()}</small></p>
+              </div>
+              
+              <div className="d-flex gap-2">
+                <button 
+                  className="btn btn-primary"
+                  onClick={onNext}
+                >
+                  📊 View Detailed Results
+                </button>
+                <button 
+                  className="btn btn-outline-secondary"
+                  onClick={() => setValuationResultsLocal(null)}
+                >
+                  Clear Results
+                </button>
+              </div>
             </div>
           </div>
         )}

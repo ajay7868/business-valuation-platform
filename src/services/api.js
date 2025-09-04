@@ -1,9 +1,10 @@
 import axios from 'axios';
 
 // Configure API base URL based on environment
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://business-valuation-platform-1.vercel.app/api'
-  : '/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? 'https://business-valuation-platform-1.vercel.app/api'
+    : 'http://localhost:5001/api');
 
 // Create axios instance with configuration
 const api = axios.create({
@@ -17,7 +18,10 @@ const api = axios.create({
 // Request interceptor for debugging
 api.interceptors.request.use(
   (config) => {
-    console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
+    }
     return config;
   },
   (error) => {
@@ -29,7 +33,10 @@ api.interceptors.request.use(
 // Response interceptor for debugging and error handling
 api.interceptors.response.use(
   (response) => {
-    console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+    // Only log in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`✅ API Response: ${response.status} ${response.config.url}`);
+    }
     return response.data;
   },
   (error) => {
@@ -68,7 +75,10 @@ export const uploadFile = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
   
-  console.log('📤 Uploading file:', file.name, 'Size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📤 Uploading file:', file.name, 'Size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
+  }
   
   return api.post('/upload', formData, {
     headers: {
@@ -78,22 +88,34 @@ export const uploadFile = async (file) => {
 };
 
 export const calculateValuation = async (companyData) => {
-  console.log('💰 Calculating valuation for:', companyData.company_name);
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('💰 Calculating valuation for:', companyData.company_name);
+  }
   return api.post('/valuation', companyData);
 };
 
 export const generateSWOT = async (companyData) => {
-  console.log('🔍 Generating SWOT analysis for:', companyData.company_name);
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 Generating SWOT analysis for:', companyData.company_name);
+  }
   return api.post('/swot', companyData);
 };
 
 export const generateReport = async (reportData) => {
-  console.log('📊 Generating report for:', reportData.company_data?.company_name);
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📊 Generating report for:', reportData.company_data?.company_name);
+  }
   return api.post('/report/generate', reportData);
 };
 
 export const downloadReport = async (filename) => {
-  console.log('📥 Downloading report:', filename);
+  // Only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📥 Downloading report:', filename);
+  }
   return api.get(`/report/download/${filename}`, {
     responseType: 'blob',
   });

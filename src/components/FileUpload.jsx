@@ -8,12 +8,10 @@ function FileUpload({ onNext, onDataExtracted }) {
   const [uploading, setUploading] = useState(false);
 
   const onDrop = useCallback(async (acceptedFiles) => {
-    console.log('Files dropped:', acceptedFiles);
     setUploading(true);
     
     for (const file of acceptedFiles) {
       try {
-        console.log('Processing file:', file.name, 'Size:', file.size);
         
         // Check file size before uploading (100MB limit)
         const maxSize = 100 * 1024 * 1024; // 100MB
@@ -22,20 +20,37 @@ function FileUpload({ onNext, onDataExtracted }) {
           throw new Error(`File too large: ${sizeMB}MB. Maximum size allowed is 100MB.`);
         }
         
-        console.log('Calling uploadFile API...');
         const response = await uploadFile(file);
-        console.log('Upload successful, response:', response);
         
         setUploadedFiles(prev => [...prev, {
           name: file.name,
           size: file.size,
           status: 'success',
-          data: response.extracted_data
+          data: response?.extracted_data
         }]);
         
         // Pass extracted data to parent
-        if (response.extracted_data) {
-          onDataExtracted(response.extracted_data);
+        if (response?.extracted_data) {
+          // Use mapped_fields for form prefilling if available
+          const dataToPass = response.extracted_data.mapped_fields || response.extracted_data;
+          const fullExtractedData = response.extracted_data;
+          
+          if (typeof onDataExtracted === 'function') {
+            // Pass both the mapped fields for form filling AND the full extracted data for SWOT
+            onDataExtracted({
+              formData: dataToPass,
+              extractedData: fullExtractedData
+            });
+            
+            // Show success message for auto-fill
+            if (dataToPass && Object.keys(dataToPass).length > 0) {
+              toast.info('✅ Form auto-filled with extracted data!');
+            }
+          } else {
+            console.error('📤 FileUpload: onDataExtracted is not a function!', onDataExtracted);
+          }
+        } else {
+          // No extracted_data in response - this is expected for some file types
         }
         
         toast.success(`${file.name} uploaded successfully!`);
@@ -115,6 +130,24 @@ function FileUpload({ onNext, onDataExtracted }) {
             {uploadedFiles.length > 0 && (
               <div className="mt-4">
                 <h6>Uploaded Files</h6>
+                {uploadedFiles.some(file => file.data && file.data.mapped_fields) && (
+                  <div className="alert alert-success">
+                    <i className="fas fa-check-circle me-2"></i>
+                    <strong>✅ Data extracted successfully!</strong><br/>
+                    <small>Click <strong>"Continue to Company Data"</strong> button below to see the auto-filled form with your extracted data.</small>
+                  </div>
+                )}
+                
+                {/* Debug: Show extracted data */}
+                {/* {uploadedFiles.map((file, index) => (
+                  file.data && file.data.mapped_fields && (
+                    <div key={`debug-${index}`} className="alert alert-info">
+                      <h6>Extracted Data Preview:</h6>
+                      <pre className="mb-0">{JSON.stringify(file.data.mapped_fields, null, 2)}</pre>
+                    </div>
+                  )
+                ))} */}
+                
                 <div className="list-group">
                   {uploadedFiles.map((file, index) => (
                     <div key={index} className="list-group-item">
@@ -186,11 +219,14 @@ function FileUpload({ onNext, onDataExtracted }) {
             </div>
 
             <button
-              className="btn btn-primary btn-block mt-3"
+              className="btn btn-primary btn-block mt-3 btn-lg"
               onClick={onNext}
               disabled={uploadedFiles.length === 0}
             >
-              Continue to Company Data
+              {uploadedFiles.some(file => file.data && file.data.mapped_fields) ? 
+                "✅ Continue to Auto-Filled Form" : 
+                "Continue to Company Data"
+              }
             </button>
           </div>
         </div>

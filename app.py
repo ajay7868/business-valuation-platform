@@ -1,17 +1,90 @@
 
 import os
 import json
-import datetime
+from datetime import datetime
 import re
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, render_template
 from flask_cors import CORS
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
+
+# Import our custom modules
+try:
+    from models import db, User, RateLimit, UserActivity
+    from auth_utils import (
+        hash_password, verify_password, generate_verification_token,
+        is_valid_email, is_valid_password, check_rate_limit,
+        log_user_activity, require_auth, get_rate_limit_status
+    )
+    from email_config import mail, send_verification_email, send_welcome_email
+    print("✅ All authentication modules imported successfully")
+except ImportError as e:
+    print(f"❌ Import error: {e}")
+    print("Please ensure all required modules are in the same directory")
+    print("Installing required packages...")
+    
+    # Try to install missing packages
+    import subprocess
+    import sys
+    
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", 
+                             "flask-login", "flask-sqlalchemy", "flask-mail", "flask-limiter"])
+        print("✅ Dependencies installed successfully")
+        
+        # Try importing again
+        from models import db, User, RateLimit, UserActivity
+        from auth_utils import (
+            hash_password, verify_password, generate_verification_token,
+            is_valid_email, is_valid_password, check_rate_limit,
+            log_user_activity, require_auth, get_rate_limit_status
+        )
+        from email_config import mail, send_verification_email, send_welcome_email
+        print("✅ All authentication modules imported successfully after installation")
+    except Exception as install_error:
+        print(f"❌ Failed to install dependencies: {install_error}")
+        print("❌ Authentication features will be disabled")
+        db = None
+        mail = None
 
 # Production configuration
 app = Flask(__name__)
+
+# Database configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///valuation_platform.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Secret key for sessions
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
+
+# Email configuration
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME', 'your-email@gmail.com')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD', 'your-app-password')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', 'your-email@gmail.com')
+
+# File upload configuration
 app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'uploads')
 app.config['REPORTS_FOLDER'] = os.environ.get('REPORTS_FOLDER', 'reports')
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_CONTENT_LENGTH', 100 * 1024 * 1024))  # 100MB max file size
+
+# Initialize extensions
+if db:
+    db.init_app(app)
+if mail:
+    mail.init_app(app)
+
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 # Enable CORS for production
 CORS(app, origins=[
@@ -30,6 +103,13 @@ ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'xlsx', 'xls', 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# Create database tables
+if db:
+    with app.app_context():
+        db.create_all()
+else:
+    print("WARNING: Database not initialized - authentication features disabled")
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint for production monitoring"""
@@ -40,10 +120,210 @@ def health_check():
         'version': '1.0.0'
     })
 
+# Authentication endpoints
+@app.route('/api/auth/signup', methods=['POST'])
+def signup():
+    """User registration endpoint"""
+    if not db or not User:
+        return jsonify({'error': 'Authentication system not available'}), 503
+    
+    try:
+        data = request.json
+        
+        # Validate required fields
+        if not data or not data.get('email') or not data.get('password') or not data.get('confirm_password'):
+            return jsonify({'error': 'Missing required fields'}), 400
+        
+        email = data['email'].lower().strip()
+        password = data['password']
+        confirm_password = data['confirm_password']
+        mobile = data.get('mobile', '').strip()
+        
+        # Validate email format
+        if not is_valid_email(email):
+            return jsonify({'error': 'Invalid email format'}), 400
+        
+        # Check if passwords match
+        if password != confirm_password:
+            return jsonify({'error': 'Passwords do not match'}), 400
+        
+        # Validate password strength
+        is_valid, message = is_valid_password(password)
+        if not is_valid:
+            return jsonify({'error': message}), 400
+        
+        # Check if user already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return jsonify({'error': 'Email already registered'}), 409
+        
+        # Create new user
+        verification_token = generate_verification_token()
+        new_user = User(
+            email=email,
+            password_hash=hash_password(password),
+            mobile=mobile,
+            verification_token=verification_token
+        )
+        
+        db.session.add(new_user)
+        db.session.commit()
+        
+        # Send verification email
+        email_sent, email_message = send_verification_email(email, verification_token)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Account created successfully. Please check your email for verification.',
+            'email_sent': email_sent,
+            'email_message': email_message
+        }), 201
+        
+    except Exception as e:
+        if db:
+            db.session.rollback()
+        print(f"Signup error: {str(e)}")
+        return jsonify({'error': f'Registration failed: {str(e)}'}), 500
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """User login endpoint"""
+    if not db or not User:
+        return jsonify({'error': 'Authentication system not available'}), 503
+    
+    try:
+        data = request.json
+        
+        if not data or not data.get('email') or not data.get('password'):
+            return jsonify({'error': 'Email and password required'}), 400
+        
+        email = data['email'].lower().strip()
+        password = data['password']
+        
+        # Find user
+        user = User.query.filter_by(email=email).first()
+        
+        if not user or not verify_password(password, user.password_hash):
+            return jsonify({'error': 'Invalid email or password'}), 401
+        
+        if not user.email_verified:
+            return jsonify({'error': 'Email not verified. Please check your email for verification link.'}), 403
+        
+        # Update last login
+        user.last_login = datetime.utcnow()
+        db.session.commit()
+        
+        # Log in user
+        login_user(user)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Login successful',
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'mobile': user.mobile,
+                'email_verified': user.email_verified
+            }
+        })
+        
+    except Exception as e:
+        print(f"Login error: {str(e)}")
+        return jsonify({'error': f'Login failed: {str(e)}'}), 500
+
+@app.route('/api/auth/verify/<token>', methods=['GET'])
+def verify_email(token):
+    """Email verification endpoint"""
+    try:
+        user = User.query.filter_by(verification_token=token).first()
+        
+        if not user:
+            return jsonify({'error': 'Invalid verification token'}), 400
+        
+        if user.email_verified:
+            return jsonify({'error': 'Email already verified'}), 400
+        
+        # Verify email
+        user.email_verified = True
+        user.verification_token = None
+        db.session.commit()
+        
+        # Send welcome email
+        send_welcome_email(user.email)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Email verified successfully! You can now log in.'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Email verification error: {str(e)}")
+        return jsonify({'error': f'Verification failed: {str(e)}'}), 500
+
+@app.route('/api/auth/logout', methods=['POST'])
+@login_required
+def logout():
+    """User logout endpoint"""
+    try:
+        logout_user()
+        return jsonify({
+            'status': 'success',
+            'message': 'Logged out successfully'
+        })
+    except Exception as e:
+        print(f"Logout error: {str(e)}")
+        return jsonify({'error': f'Logout failed: {str(e)}'}), 500
+
+@app.route('/api/auth/profile', methods=['GET'])
+@login_required
+def get_profile():
+    """Get user profile"""
+    try:
+        return jsonify({
+            'status': 'success',
+            'user': {
+                'id': current_user.id,
+                'email': current_user.email,
+                'mobile': current_user.mobile,
+                'email_verified': current_user.email_verified,
+                'created_at': current_user.created_at.isoformat(),
+                'last_login': current_user.last_login.isoformat() if current_user.last_login else None
+            }
+        })
+    except Exception as e:
+        print(f"Profile error: {str(e)}")
+        return jsonify({'error': f'Failed to get profile: {str(e)}'}), 500
+
+@app.route('/api/auth/rate-limit-status', methods=['GET'])
+def get_rate_limit_status_endpoint():
+    """Get current rate limit status for user"""
+    try:
+        upload_status = get_rate_limit_status('upload')
+        report_status = get_rate_limit_status('report_generation')
+        
+        return jsonify({
+            'status': 'success',
+            'upload': upload_status,
+            'report_generation': report_status
+        })
+    except Exception as e:
+        print(f"Rate limit status error: {str(e)}")
+        return jsonify({'error': f'Failed to get rate limit status: {str(e)}'}), 500
+
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
-    """Upload and process financial documents"""
+    """Upload and process financial documents with rate limiting"""
     try:
+        # Check rate limit
+        rate_limit_ok, rate_limit_message = check_rate_limit('upload', max_attempts=2)
+        if not rate_limit_ok:
+            return jsonify({
+                'error': 'Rate limit exceeded',
+                'message': rate_limit_message,
+                'requires_signup': True
+            }), 429
+        
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
         
@@ -75,16 +355,24 @@ def upload_file():
         # AI validation of extracted data
         validation_result = validate_financial_data_with_ai(extracted_data)
         
+        # Log activity
+        user_id = current_user.id if current_user.is_authenticated else None
+        log_user_activity(user_id, 'upload', True)
+        
         return jsonify({
             'status': 'success',
             'message': 'File uploaded and processed successfully',
             'filename': filename,
             'extracted_data': extracted_data,
-            'ai_validation': validation_result
+            'ai_validation': validation_result,
+            'rate_limit': get_rate_limit_status('upload')
         })
         
     except Exception as e:
         print(f"Upload error: {str(e)}")
+        # Log failed activity
+        user_id = current_user.id if current_user.is_authenticated else None
+        log_user_activity(user_id, 'upload', False)
         return jsonify({'error': f'File upload failed: {str(e)}'}), 500
 
 def extract_data_from_file(filepath):
@@ -1251,8 +1539,9 @@ def safe_format_number(value, default=0):
         return default
 
 @app.route('/api/report/generate', methods=['POST'])
+@require_auth
 def generate_report():
-    """Generate comprehensive valuation report in multiple formats"""
+    """Generate comprehensive valuation report in multiple formats (requires authentication)"""
     try:
         data = request.json
         report_type = data.get('format', 'pdf').lower()
@@ -1289,6 +1578,9 @@ def generate_report():
             print("Falling back to text format...")
             report_filename, report_path = generate_text_report(company_data, valuation_results, swot_analysis, data, safe_format_number)
         
+        # Log successful report generation
+        log_user_activity(current_user.id, 'report_generation', True)
+        
         return jsonify({
             'status': 'success',
             'report_filename': report_filename,
@@ -1300,6 +1592,9 @@ def generate_report():
         
     except Exception as e:
         print(f"Report generation error: {str(e)}")
+        # Log failed report generation
+        if current_user.is_authenticated:
+            log_user_activity(current_user.id, 'report_generation', False)
         return jsonify({'error': f'Report generation failed: {str(e)}'}), 500
 
 def generate_pdf_report(company_data, valuation_results, swot_analysis, data, safe_format_number):

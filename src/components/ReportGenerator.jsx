@@ -4,7 +4,7 @@ import { generateReport, downloadReport } from '../services/api';
 
 function ReportGenerator({ companyData, valuationResults, swotAnalysis, onPrev }) {
   const [generating, setGenerating] = useState(false);
-  const [reportFormat, setReportFormat] = useState('pdf');
+  const [reportFormat, setReportFormat] = useState('txt');
   const [generatedReports, setGeneratedReports] = useState([]);
 
   const handleGenerateReport = async () => {
@@ -13,14 +13,12 @@ function ReportGenerator({ companyData, valuationResults, swotAnalysis, onPrev }
     try {
       const reportData = {
         format: reportFormat,
-        company_name: companyData.company_name,
+        company_name: companyData.company_name || 'Company',
         executive_summary: generateExecutiveSummary(),
-        asset_value: valuationResults?.asset_based || 0,
-        income_value: valuationResults?.income_based?.dcf_value || 0,
-        market_value: valuationResults?.market_based?.revenue_multiple || 0,
-        low_value: valuationResults?.valuation_range?.low || 0,
-        mid_value: valuationResults?.valuation_range?.mid || 0,
-        high_value: valuationResults?.valuation_range?.high || 0,
+        calculated_value: valuationResults?.calculated_value || 0,
+        asset_value: valuationResults?.asset_value || 0,
+        ebitda_multiple: valuationResults?.ebitda_multiple || 0,
+        method: valuationResults?.method || 'Standard Valuation',
         swot_analysis: swotAnalysis,
         company_data: companyData,
         valuation_results: valuationResults
@@ -28,15 +26,20 @@ function ReportGenerator({ companyData, valuationResults, swotAnalysis, onPrev }
 
       const response = await generateReport(reportData);
       
-      setGeneratedReports(prev => [...prev, {
-        filename: response.report_filename,
-        format: reportFormat,
-        generated_at: new Date().toLocaleString(),
-        download_url: response.download_url
-      }]);
-      
-      toast.success('Report generated successfully!');
+      if (response && response.report_filename) {
+        setGeneratedReports(prev => [...prev, {
+          filename: response.report_filename,
+          format: reportFormat,
+          generated_at: new Date().toLocaleString(),
+          download_url: response.download_url || `/api/report/download/${response.report_filename}`
+        }]);
+        
+        toast.success('Report generated successfully!');
+      } else {
+        throw new Error('Invalid response from server');
+      }
     } catch (error) {
+      console.error('📄 Report generation error:', error);
       toast.error('Failed to generate report: ' + error.message);
     } finally {
       setGenerating(false);
@@ -45,19 +48,32 @@ function ReportGenerator({ companyData, valuationResults, swotAnalysis, onPrev }
 
   const handleDownloadReport = async (filename) => {
     try {
+      console.log('📄 Downloading report:', filename);
+      
+      // Use the API service to download the report
       const response = await downloadReport(filename);
       
-      // Create blob link to download
-      const url = window.URL.createObjectURL(new Blob([response]));
+      // Create blob URL for download
+      const blob = new Blob([response], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create download link
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', filename);
+      link.style.display = 'none';
+      
+      // Add to DOM, click, and remove
       document.body.appendChild(link);
       link.click();
-      link.remove();
+      document.body.removeChild(link);
       
-      toast.success('Report downloaded!');
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Report downloaded successfully!');
     } catch (error) {
+      console.error('📄 Download error:', error);
       toast.error('Failed to download report: ' + error.message);
     }
   };
@@ -65,9 +81,10 @@ function ReportGenerator({ companyData, valuationResults, swotAnalysis, onPrev }
   const generateExecutiveSummary = () => {
     const company = companyData.company_name || 'The Company';
     const revenue = companyData.revenue || 0;
-    const midValue = valuationResults?.valuation_range?.mid || 0;
+    const calculatedValue = valuationResults?.calculated_value || 0;
+    const method = valuationResults?.method || 'Standard Valuation';
     
-    return `${company} is a ${companyData.industry || 'business'} company with annual revenue of $${revenue.toLocaleString()}. Based on our comprehensive analysis using multiple valuation methodologies, we estimate the fair market value to be approximately $${midValue.toLocaleString()}.`;
+    return `${company} is a ${companyData.industry || 'business'} company with annual revenue of $${revenue.toLocaleString()}. Based on our comprehensive analysis using ${method}, we estimate the fair market value to be approximately $${calculatedValue.toLocaleString()}.`;
   };
 
   const formatCurrency = (amount) => {
@@ -100,16 +117,20 @@ function ReportGenerator({ companyData, valuationResults, swotAnalysis, onPrev }
                 <table className="table table-sm">
                   <tbody>
                     <tr>
-                      <td>Low Estimate:</td>
-                      <td>{formatCurrency(valuationResults?.valuation_range?.low || 0)}</td>
+                      <td>Calculated Value:</td>
+                      <td><strong>{formatCurrency(valuationResults?.calculated_value || 0)}</strong></td>
                     </tr>
                     <tr>
-                      <td>Mid Estimate:</td>
-                      <td><strong>{formatCurrency(valuationResults?.valuation_range?.mid || 0)}</strong></td>
+                      <td>Asset Value:</td>
+                      <td>{formatCurrency(valuationResults?.asset_value || 0)}</td>
                     </tr>
                     <tr>
-                      <td>High Estimate:</td>
-                      <td>{formatCurrency(valuationResults?.valuation_range?.high || 0)}</td>
+                      <td>EBITDA Multiple:</td>
+                      <td>{valuationResults?.ebitda_multiple || 0}x</td>
+                    </tr>
+                    <tr>
+                      <td>Method:</td>
+                      <td>{valuationResults?.method || 'Standard Valuation'}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -120,50 +141,14 @@ function ReportGenerator({ companyData, valuationResults, swotAnalysis, onPrev }
               </div>
             </div>
 
-            {/* Report Options */}
+            {/* Report Format Note */}
             <div className="mb-4">
-              <h6>Report Format</h6>
-              <div className="form-check form-check-inline">
-                <input
-                  className="form-check-input"
-                  type="radio"
-                  name="reportFormat"
-                  id="pdf"
-                  value="pdf"
-                  checked={reportFormat === 'pdf'}
-                  onChange={(e) => setReportFormat(e.target.value)}
-                />
-                <label className="form-check-label" htmlFor="pdf">
-                  PDF Report
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  className="form-check-input"
-                  type="radio"
-                  name="reportFormat"
-                  id="word"
-                  value="word"
-                  checked={reportFormat === 'word'}
-                  onChange={(e) => setReportFormat(e.target.value)}
-                />
-                <label className="form-check-label" htmlFor="word">
-                  Word Document
-                </label>
-              </div>
-              <div className="form-check form-check-inline">
-                <input
-                  className="form-check-input"
-                  type="radio"
-                  name="reportFormat"
-                  id="excel"
-                  value="excel"
-                  checked={reportFormat === 'excel'}
-                  onChange={(e) => setReportFormat(e.target.value)}
-                />
-                <label className="form-check-label" htmlFor="excel">
-                  Excel Workbook
-                </label>
+              <div className="alert alert-info">
+                <h6 className="mb-2">📄 Report Format</h6>
+                <p className="mb-0">
+                  Reports are generated as <strong>.txt files</strong> for maximum compatibility and to prevent file corruption issues. 
+                  You can easily convert them to PDF, Word, or Excel format using any text editor or online converter.
+                </p>
               </div>
             </div>
 
