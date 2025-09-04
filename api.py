@@ -80,6 +80,53 @@ def login():
     except Exception as e:
         return jsonify({'error': f'Login failed: {str(e)}'}), 500
 
+@app.route('/api/auth/profile', methods=['GET'])
+def get_profile():
+    """Get user profile endpoint"""
+    try:
+        # Mock user profile
+        return jsonify({
+            'user': {
+                'id': 'mock_user_123',
+                'email': 'user@example.com',
+                'email_verified': True,
+                'created_at': '2025-01-01T00:00:00Z'
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Profile fetch failed: {str(e)}'}), 500
+
+@app.route('/api/auth/logout', methods=['POST'])
+def logout():
+    """User logout endpoint"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Mock successful logout
+        return jsonify({
+            'message': 'Logout successful'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Logout failed: {str(e)}'}), 500
+
+@app.route('/api/auth/rate-limit-status', methods=['GET'])
+def get_rate_limit_status():
+    """Get rate limit status endpoint"""
+    try:
+        # Mock rate limit status
+        return jsonify({
+            'requests_remaining': 100,
+            'reset_time': datetime.now().isoformat(),
+            'limit': 100
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Rate limit status fetch failed: {str(e)}'}), 500
+
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     """File upload endpoint"""

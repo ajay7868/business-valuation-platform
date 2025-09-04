@@ -69,8 +69,7 @@ function App() {
 
   const validateSessionWithBackend = async (sessionToken) => {
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-      const response = await fetch(`${baseUrl}/api/auth/profile`, {
+      const response = await fetch('/api/auth/profile', {
         headers: {
           'Authorization': `Bearer ${sessionToken}`
         }
@@ -97,8 +96,7 @@ function App() {
 
   const checkAuthStatus = async () => {
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001'; // Point to our minimal auth backend
-      const response = await fetch(`${baseUrl}/api/auth/profile`);
+      const response = await fetch('/api/auth/profile');
       if (response.ok) {
         const result = await response.json();
         setUser(result.user);
@@ -110,7 +108,6 @@ function App() {
 
   const checkRateLimitStatus = async () => {
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
       const sessionToken = localStorage.getItem('session_token');
       
       const headers = {};
@@ -118,7 +115,7 @@ function App() {
         headers['Authorization'] = `Bearer ${sessionToken}`;
       }
       
-      const response = await fetch(`${baseUrl}/api/auth/rate-limit-status`, { headers });
+      const response = await fetch('/api/auth/rate-limit-status', { headers });
       if (response.ok) {
         const result = await response.json();
         setRateLimitStatus(result);
@@ -138,8 +135,7 @@ function App() {
     try {
       const sessionToken = localStorage.getItem('session_token');
       if (sessionToken) {
-        const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-        await fetch(`${baseUrl}/api/auth/logout`, {
+        await fetch('/api/auth/logout', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -20,10 +20,8 @@ function UserProfile({ user, onLogout }) {
     setLoading(true);
     try {
       const sessionToken = localStorage.getItem('session_token');
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
-      
       if (sessionToken) {
-        const response = await fetch(`${baseUrl}/api/auth/logout`, {
+        const response = await fetch('/api/auth/logout', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

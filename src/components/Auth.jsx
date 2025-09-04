@@ -23,9 +23,8 @@ function Auth({ onAuthSuccess, onClose }) {
     setLoading(true);
 
     try {
-      const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5001';
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
-      const response = await fetch(`${baseUrl}${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
