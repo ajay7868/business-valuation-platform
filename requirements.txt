@@ -1,13 +1,5 @@
 
-# Vercel-optimized requirements
-# Core Flask dependencies
 Flask==2.3.3
 Flask-CORS==4.0.0
 Werkzeug==2.3.7
-
-# Environment and configuration
 python-dotenv==1.0.0
-
-# File processing (lightweight)
-openpyxl==3.1.2
-xlrd==2.0.1

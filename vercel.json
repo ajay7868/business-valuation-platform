@@ -3,10 +3,7 @@
   "builds": [
     {
       "src": "app_vercel.py",
-      "use": "@vercel/python",
-      "config": {
-        "runtime": "python3.9"
-      }
+      "use": "@vercel/python"
     },
     {
       "src": "package.json",
@@ -35,8 +32,7 @@
     }
   ],
   "env": {
-    "FLASK_ENV": "production",
-    "PYTHON_VERSION": "3.9"
+    "FLASK_ENV": "production"
   },
   "functions": {
     "app_vercel.py": {
