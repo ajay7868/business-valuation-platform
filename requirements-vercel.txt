@@ -1,0 +1,25 @@
+# Vercel-optimized requirements for serverless deployment
+# Using pre-compiled wheels and compatible versions
+
+# Core Flask dependencies
+Flask==2.3.3
+Flask-CORS==4.0.0
+Werkzeug==2.3.7
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# Data processing (pre-compiled wheels)
+pandas==2.1.4
+numpy==1.24.4
+
+# File processing (lightweight alternatives)
+openpyxl==3.1.2
+xlrd==2.0.1
+
+# Optional dependencies (can be removed if not needed)
+# python-docx==0.8.11  # Heavy dependency
+# pdfplumber==0.9.0    # Heavy dependency
+# Pillow==10.1.0       # Heavy dependency
+# openai==1.3.0        # AI dependency
+# reportlab==4.0.7     # PDF generation

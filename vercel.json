@@ -2,8 +2,11 @@
   "version": 2,
   "builds": [
     {
-      "src": "app.py",
-      "use": "@vercel/python"
+      "src": "app_vercel.py",
+      "use": "@vercel/python",
+      "config": {
+        "runtime": "python3.9"
+      }
     },
     {
       "src": "package.json",
@@ -16,7 +19,7 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "app.py"
+      "dest": "app_vercel.py"
     },
     {
       "src": "/static/(.*)",
@@ -32,6 +35,12 @@
     }
   ],
   "env": {
-    "FLASK_ENV": "production"
+    "FLASK_ENV": "production",
+    "PYTHON_VERSION": "3.9"
+  },
+  "functions": {
+    "app_vercel.py": {
+      "maxDuration": 30
+    }
   }
 }
