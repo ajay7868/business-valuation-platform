@@ -17,9 +17,6 @@ import pandas as pd
 import openpyxl
 from werkzeug.utils import secure_filename
 import logging
-import openai
-import json
-from dynamic_swot import swot_analyzer
 from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
@@ -1319,11 +1316,12 @@ def calculate_valuation():
     except Exception as e:
         print(f"Valuation calculation error: {str(e)}")
         return jsonify({'error': f'Valuation failed: {str(e)}'}), 500
+
 @app.route('/api/swot', methods=['POST'])
 def generate_swot():
-    """Generate dynamic SWOT analysis using OpenAI with fallback to rule-based analysis"""
+    """Generate intelligent SWOT analysis based on company data and extracted file data"""
     try:
-        print("🤖 Dynamic SWOT analysis request received")
+        print("SWOT analysis request received")
         data = request.get_json()
         print(f"📊 SWOT Analysis - Received data keys: {list(data.keys()) if data else 'None'}")
         print(f"📊 SWOT Analysis - extracted_data: {data.get('extracted_data') if data else 'None'}")
@@ -1389,93 +1387,13 @@ def generate_swot():
         roa = (net_income / total_assets * 100) if total_assets > 0 else 0
         roe = (net_income / (total_assets - total_liabilities) * 100) if (total_assets - total_liabilities) > 0 else 0
         
-        # Prepare company data for dynamic analysis
-        company_data = {
-            'company_name': company_name,
-            'industry': industry,
-            'revenue': revenue,
-            'ebitda': ebitda,
-            'net_income': net_income,
-            'total_assets': total_assets,
-            'total_liabilities': total_liabilities,
-            'employees': employees,
-            'cash': cash,
-            'inventory': inventory,
-            'accounts_receivable': accounts_receivable,
-            'cost_of_goods_sold': cost_of_goods_sold,
-            'gross_profit': gross_profit,
-            'operating_expenses': operating_expenses,
-            'equipment': equipment,
-            'fitout': fitout
-        }
-        
-        # Prepare financial metrics
-        financial_metrics = {
-            'ebitda_margin': ebitda_margin,
-            'net_margin': net_margin,
-            'gross_margin': gross_margin,
-            'operating_margin': operating_margin,
-            'debt_to_assets': debt_to_assets,
-            'debt_to_equity': debt_to_equity,
-            'revenue_per_employee': revenue_per_employee,
-            'current_ratio': current_ratio,
-            'quick_ratio': quick_ratio,
-            'inventory_turnover': inventory_turnover,
-            'asset_turnover': asset_turnover,
-            'roa': roa,
-            'roe': roe
-        }
-        
-        # Try dynamic AI-powered SWOT analysis first
-        print("🤖 Attempting AI-powered SWOT analysis...")
-        ai_swot = swot_analyzer.generate_dynamic_swot(company_data, financial_metrics)
-        
-        if ai_swot:
-            print("✅ AI-powered SWOT analysis completed successfully")
-            # Add financial metrics to the response
-            ai_swot['financial_metrics'] = financial_metrics
-            ai_swot['company_name'] = company_name
-            ai_swot['industry'] = industry
-            
-            return jsonify({
-                'status': 'success',
-                'swot_analysis': ai_swot,
-                'analysis_type': 'AI-Generated'
-            })
-        else:
-            print("⚠️ AI analysis failed, falling back to rule-based analysis")
-            # Fallback to rule-based analysis
-            return generate_rule_based_swot(company_data, financial_metrics)
-        
-    except Exception as e:
-        print(f"❌ SWOT analysis error: {str(e)}")
-        return jsonify({'error': f'SWOT analysis failed: {str(e)}'}), 500
-
-def generate_rule_based_swot(company_data, financial_metrics):
-    """Fallback rule-based SWOT analysis when AI is unavailable"""
-    try:
-        print("📊 Generating rule-based SWOT analysis...")
-        
-        # Extract metrics
-        ebitda_margin = financial_metrics.get('ebitda_margin', 0)
-        net_margin = financial_metrics.get('net_margin', 0)
-        gross_margin = financial_metrics.get('gross_margin', 0)
-        operating_margin = financial_metrics.get('operating_margin', 0)
-        debt_to_assets = financial_metrics.get('debt_to_assets', 0)
-        debt_to_equity = financial_metrics.get('debt_to_equity', 0)
-        revenue_per_employee = financial_metrics.get('revenue_per_employee', 0)
-        current_ratio = financial_metrics.get('current_ratio', 0)
-        roa = financial_metrics.get('roa', 0)
-        roe = financial_metrics.get('roe', 0)
-        asset_turnover = financial_metrics.get('asset_turnover', 0)
-        
-        # Generate SWOT analysis
+        # Generate intelligent SWOT analysis
         strengths = []
         weaknesses = []
         opportunities = []
         threats = []
         
-        # STRENGTHS Analysis
+        # STRENGTHS Analysis - Enhanced with comprehensive ratios
         if ebitda_margin > 15:
             strengths.append(f"Strong EBITDA margin of {ebitda_margin:.1f}% indicates efficient operations")
         elif ebitda_margin > 10:
@@ -1491,10 +1409,18 @@ def generate_rule_based_swot(company_data, financial_metrics):
         elif gross_margin > 30:
             strengths.append(f"Healthy gross margin of {gross_margin:.1f}% shows good pricing power")
         
+        if operating_margin > 15:
+            strengths.append(f"Excellent operating margin of {operating_margin:.1f}% demonstrates operational efficiency")
+        elif operating_margin > 10:
+            strengths.append(f"Good operating margin of {operating_margin:.1f}% shows strong operational control")
+        
         if debt_to_assets < 30:
             strengths.append(f"Low debt-to-assets ratio of {debt_to_assets:.1f}% indicates strong financial stability")
         elif debt_to_assets < 50:
             strengths.append(f"Moderate debt-to-assets ratio of {debt_to_assets:.1f}% shows manageable leverage")
+        
+        if debt_to_equity < 50:
+            strengths.append(f"Conservative debt-to-equity ratio of {debt_to_equity:.1f}% shows strong equity position")
         
         if revenue_per_employee > 200000:
             strengths.append(f"High revenue per employee of ${revenue_per_employee:,.0f} indicates efficient workforce")
@@ -1511,85 +1437,167 @@ def generate_rule_based_swot(company_data, financial_metrics):
         elif roa > 5:
             strengths.append(f"Good return on assets of {roa:.1f}% shows effective asset management")
         
-        # WEAKNESSES Analysis
+        if roe > 15:
+            strengths.append(f"Excellent return on equity of {roe:.1f}% demonstrates strong shareholder value creation")
+        elif roe > 10:
+            strengths.append(f"Good return on equity of {roe:.1f}% shows solid profitability")
+        
+        if asset_turnover > 1.5:
+            strengths.append(f"High asset turnover of {asset_turnover:.1f}x indicates efficient asset utilization")
+        elif asset_turnover > 1.0:
+            strengths.append(f"Good asset turnover of {asset_turnover:.1f}x shows effective asset management")
+        
+        if inventory_turnover > 6:
+            strengths.append(f"High inventory turnover of {inventory_turnover:.1f}x indicates efficient inventory management")
+        elif inventory_turnover > 4:
+            strengths.append(f"Good inventory turnover of {inventory_turnover:.1f}x shows effective inventory control")
+        
+        if revenue > 10000000:
+            strengths.append(f"Large revenue base of ${revenue:,.0f} provides market presence and scale")
+        elif revenue > 1000000:
+            strengths.append(f"Solid revenue base of ${revenue:,.0f} indicates established market position")
+        
+        # Asset composition strengths
+        if cash > revenue * 0.1:
+            strengths.append(f"Strong cash position of ${cash:,.0f} provides financial flexibility")
+        if equipment > 0:
+            strengths.append(f"Equipment assets of ${equipment:,.0f} provide operational infrastructure")
+        
+        # WEAKNESSES Analysis - Enhanced with comprehensive ratios
         if ebitda_margin < 5:
-            weaknesses.append(f"Low EBITDA margin of {ebitda_margin:.1f}% indicates operational inefficiencies")
-        elif ebitda_margin < 10:
-            weaknesses.append(f"Below-average EBITDA margin of {ebitda_margin:.1f}% suggests room for improvement")
+            weaknesses.append(f"Low EBITDA margin of {ebitda_margin:.1f}% suggests operational inefficiencies")
         
         if net_margin < 2:
             weaknesses.append(f"Low net profit margin of {net_margin:.1f}% indicates profitability challenges")
-        elif net_margin < 5:
-            weaknesses.append(f"Below-average net profit margin of {net_margin:.1f}% suggests cost management issues")
+        
+        if gross_margin < 20:
+            weaknesses.append(f"Low gross margin of {gross_margin:.1f}% suggests pricing or cost control issues")
+        
+        if operating_margin < 5:
+            weaknesses.append(f"Low operating margin of {operating_margin:.1f}% indicates operational inefficiencies")
         
         if debt_to_assets > 70:
-            weaknesses.append(f"High debt-to-assets ratio of {debt_to_assets:.1f}% indicates significant financial risk")
+            weaknesses.append(f"High debt-to-assets ratio of {debt_to_assets:.1f}% creates financial risk")
         elif debt_to_assets > 50:
-            weaknesses.append(f"Elevated debt-to-assets ratio of {debt_to_assets:.1f}% suggests financial stress")
+            weaknesses.append(f"Elevated debt-to-assets ratio of {debt_to_assets:.1f}% increases financial pressure")
+        
+        if debt_to_equity > 100:
+            weaknesses.append(f"High debt-to-equity ratio of {debt_to_equity:.1f}% indicates excessive leverage")
         
         if revenue_per_employee < 50000:
-            weaknesses.append(f"Low revenue per employee of ${revenue_per_employee:,.0f} indicates operational inefficiency")
-        elif revenue_per_employee < 100000:
-            weaknesses.append(f"Below-average revenue per employee of ${revenue_per_employee:,.0f} suggests productivity issues")
+            weaknesses.append(f"Low revenue per employee of ${revenue_per_employee:,.0f} suggests operational inefficiency")
         
         if current_ratio < 1:
-            weaknesses.append(f"Low current ratio of {current_ratio:.1f} indicates liquidity concerns")
-        elif current_ratio < 1.5:
-            weaknesses.append(f"Below-average current ratio of {current_ratio:.1f} suggests cash flow challenges")
+            weaknesses.append(f"Low current ratio of {current_ratio:.1f} indicates potential liquidity issues")
+        
+        if roa < 3:
+            weaknesses.append(f"Low return on assets of {roa:.1f}% suggests inefficient asset utilization")
+        
+        if roe < 5:
+            weaknesses.append(f"Low return on equity of {roe:.1f}% indicates poor profitability for shareholders")
+        
+        if asset_turnover < 0.5:
+            weaknesses.append(f"Low asset turnover of {asset_turnover:.1f}x suggests underutilized assets")
+        
+        if inventory_turnover < 2:
+            weaknesses.append(f"Low inventory turnover of {inventory_turnover:.1f}x indicates slow-moving inventory")
+        
+        if revenue < 100000:
+            weaknesses.append(f"Small revenue base of ${revenue:,.0f} limits market presence and growth potential")
+        
+        # Asset composition weaknesses
+        if accounts_receivable > revenue * 0.5:
+            weaknesses.append(f"High accounts receivable of ${accounts_receivable:,.0f} indicates collection issues")
+        
+        if inventory > revenue * 0.3:
+            weaknesses.append(f"High inventory levels of ${inventory:,.0f} suggest overstocking or slow sales")
         
         # OPPORTUNITIES Analysis
-        if ebitda_margin > 10:
-            opportunities.append("Strong operational efficiency provides foundation for expansion and growth")
+        if ebitda_margin > 10 and revenue < 5000000:
+            opportunities.append("Strong operational efficiency provides foundation for revenue growth")
         
-        if debt_to_assets < 40:
-            opportunities.append("Low debt levels provide capacity for strategic investments and acquisitions")
+        if net_margin > 5 and debt_to_assets < 40:
+            opportunities.append("Healthy profitability and low debt enable expansion opportunities")
         
         if revenue_per_employee > 150000:
-            opportunities.append("High productivity enables scaling operations without proportional headcount increases")
+            opportunities.append("High productivity per employee supports scaling operations")
         
-        if current_ratio > 2:
-            opportunities.append("Strong liquidity position enables opportunistic investments and market expansion")
+        if current_ratio > 1.5 and cash > revenue * 0.1:
+            opportunities.append("Strong cash position enables strategic investments and acquisitions")
         
-        # Add industry-specific opportunities
-        industry = company_data.get('industry', 'General')
-        if industry.lower() in ['technology', 'software']:
-            opportunities.append("Digital transformation trends create opportunities for technology adoption")
-        elif industry.lower() in ['manufacturing', 'industrial']:
-            opportunities.append("Industry 4.0 and automation trends present efficiency improvement opportunities")
+        if industry.lower() in ['technology', 'software', 'saas']:
+            opportunities.append("Technology sector offers digital transformation and innovation opportunities")
         elif industry.lower() in ['healthcare', 'medical']:
-            opportunities.append("Aging population and healthcare digitization create growth opportunities")
+            opportunities.append("Healthcare sector provides growth opportunities from demographic trends")
+        elif industry.lower() in ['manufacturing', 'industrial']:
+            opportunities.append("Manufacturing sector offers automation and efficiency improvement opportunities")
+        
+        if employees > 50:
+            opportunities.append("Larger workforce enables market expansion and service diversification")
         
         # THREATS Analysis
         if debt_to_assets > 60:
-            threats.append("High debt levels increase vulnerability to interest rate changes and economic downturns")
+            threats.append("High debt levels increase vulnerability to interest rate changes")
         
         if current_ratio < 1.2:
-            threats.append("Low liquidity position increases risk during economic uncertainty or market disruptions")
+            threats.append("Low liquidity position creates risk during economic downturns")
         
         if ebitda_margin < 8:
-            threats.append("Low operational efficiency makes the company vulnerable to competitive pressure")
+            threats.append("Low operational margins make company vulnerable to cost increases")
         
-        # Add general market threats
-        threats.append("Economic uncertainty and market volatility pose ongoing risks")
-        threats.append("Competitive pressure and market saturation in key segments")
-        threats.append("Regulatory changes and compliance requirements may impact operations")
+        if revenue < 500000:
+            threats.append("Small size limits ability to compete with larger players")
         
-        # Ensure we have at least some content in each category
+        if industry.lower() in ['retail', 'hospitality']:
+            threats.append("Consumer-facing industries face economic sensitivity and competition")
+        elif industry.lower() in ['energy', 'utilities']:
+            threats.append("Regulated industries face policy and regulatory risks")
+        
+        if employees < 10:
+            threats.append("Small team size creates key person dependency risks")
+        
+        # Add industry-specific insights
+        industry_insights = get_industry_insights(industry, revenue, ebitda_margin)
+        strengths.extend(industry_insights.get('strengths', []))
+        weaknesses.extend(industry_insights.get('weaknesses', []))
+        opportunities.extend(industry_insights.get('opportunities', []))
+        threats.extend(industry_insights.get('threats', []))
+        
+        # Ensure we have at least some analysis
         if not strengths:
-            strengths.append("Company shows potential for operational improvements")
+            strengths.append("Company shows potential for growth and development")
         if not weaknesses:
-            weaknesses.append("Limited financial data available for comprehensive weakness analysis")
+            weaknesses.append("Limited data available for comprehensive weakness analysis")
         if not opportunities:
-            opportunities.append("Market conditions present various growth opportunities")
+            opportunities.append("Market conditions may present growth opportunities")
         if not threats:
             threats.append("General market and economic risks apply to all businesses")
         
         swot_analysis = {
-            'company_name': company_data.get('company_name', 'Unknown Company'),
-            'industry': company_data.get('industry', 'General'),
+            'company_name': company_name,
+            'industry': industry,
             'generated_at': datetime.now().isoformat(),
-            'analysis_type': 'Rule-Based',
-            'financial_metrics': financial_metrics,
+            'financial_metrics': {
+                'revenue': revenue,
+                'ebitda_margin': ebitda_margin,
+                'net_margin': net_margin,
+                'gross_margin': gross_margin,
+                'operating_margin': operating_margin,
+                'debt_to_assets': debt_to_assets,
+                'debt_to_equity': debt_to_equity,
+                'revenue_per_employee': revenue_per_employee,
+                'current_ratio': current_ratio,
+                'quick_ratio': quick_ratio,
+                'inventory_turnover': inventory_turnover,
+                'asset_turnover': asset_turnover,
+                'roa': roa,
+                'roe': roe,
+                'cash': cash,
+                'inventory': inventory,
+                'accounts_receivable': accounts_receivable,
+                'total_assets': total_assets,
+                'total_liabilities': total_liabilities
+            },
             'strengths': strengths[:8],  # Limit to top 8
             'weaknesses': weaknesses[:8],
             'opportunities': opportunities[:8],
@@ -1598,13 +1606,13 @@ def generate_rule_based_swot(company_data, financial_metrics):
         
         return jsonify({
             'status': 'success',
-            'swot_analysis': swot_analysis,
-            'analysis_type': 'Rule-Based'
+            'swot_analysis': swot_analysis
         })
         
     except Exception as e:
-        print(f"❌ Rule-based SWOT analysis error: {str(e)}")
-        return jsonify({'error': f'Rule-based SWOT analysis failed: {str(e)}'}), 500
+        print(f"SWOT analysis error: {str(e)}")
+        return jsonify({'error': f'SWOT analysis failed: {str(e)}'}), 500
+
 def get_industry_insights(industry, revenue, ebitda_margin):
     """Generate industry-specific SWOT insights"""
     industry_lower = industry.lower()
