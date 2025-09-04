@@ -347,9 +347,9 @@ function Dashboard({
             <div className="card-body">
               <div className="alert alert-success">
                 <h6>Company: {valuationResults.company_name}</h6>
-                <p className="mb-2"><strong>Calculated Value:</strong> ${valuationResults.calculated_value.toLocaleString()}</p>
+                <p className="mb-2"><strong>Calculated Value:</strong> ${(valuationResults.calculated_value || 0).toLocaleString()}</p>
                 <p className="mb-2"><strong>Method:</strong> {valuationResults.method}</p>
-                <p className="mb-0 text-muted"><small>Calculated: {new Date(valuationResults.calculated_at).toLocaleString()}</small></p>
+                <p className="mb-0 text-muted"><small>Calculated: {valuationResults.calculated_at ? new Date(valuationResults.calculated_at).toLocaleString() : 'Unknown'}</small></p>
               </div>
               
               <div className="d-flex gap-2">
