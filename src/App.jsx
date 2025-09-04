@@ -255,14 +255,14 @@ function App() {
 
       <div className="container mt-4">
         {/* Rate Limit Warning */}
-        {rateLimitStatus && (rateLimitStatus.upload.blocked || rateLimitStatus.report_generation.blocked) && (
+        {(rateLimitStatus?.upload?.blocked || rateLimitStatus?.report_generation?.blocked) && (
           <div className="alert alert-warning">
             <i className="fas fa-exclamation-triangle me-2"></i>
             <strong>Rate Limit Exceeded</strong>
-            {rateLimitStatus.upload.blocked && (
+            {rateLimitStatus?.upload?.blocked && (
               <div>File uploads are temporarily blocked. Please sign up to continue.</div>
             )}
-            {rateLimitStatus.report_generation.blocked && (
+            {rateLimitStatus?.report_generation?.blocked && (
               <div>Report generation is temporarily blocked. Please sign up to continue.</div>
             )}
           </div>
